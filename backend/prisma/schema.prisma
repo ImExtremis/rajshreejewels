@@ -1,0 +1,470 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────
+
+enum ItemStatus {
+  AVAILABLE
+  RESERVED      // Checkout started — 15-min TTL
+  SOLD
+  UNLISTED      // Admin hid it manually
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_FAILED
+  CONFIRMED
+  PROCESSING      // Admin acknowledged
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum Metal {
+  GOLD_1GRAM
+  SILVER
+  BRASS
+  COPPER
+  ALLOY
+  NONE          // Purely fabric/stone pieces
+}
+
+enum Finish {
+  GOLD_POLISH
+  SILVER_POLISH
+  ANTIQUE
+  MATTE
+  RHODIUM
+  OXIDISED
+  MEENAKARI
+  KUNDAN
+  NONE
+}
+
+enum Category {
+  NECKLACE
+  EARRINGS
+  BANGLES
+  BRACELET
+  RING
+  ANKLET
+  MAANG_TIKKA
+  NOSE_PIN
+  PENDANT
+  SET             // Matched necklace + earring set
+  OTHER
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NETBANKING
+  WALLET
+  COD
+}
+
+enum CouponType {
+  PERCENTAGE    // value = percent off (1–100)
+  FIXED_INR     // value = rupees off
+  FREE_SHIPPING // ignores value field
+}
+
+enum MessageFrom {
+  CUSTOMER
+  ADMIN
+}
+
+// ─── USERS ────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  phone         String?   @unique
+  name          String
+  passwordHash  String?
+  googleId      String?   @unique
+  isAdmin       Boolean   @default(false)
+  isVerified    Boolean   @default(false)
+  isOwner       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  wishlist      WishlistItem[]
+  sessions      Session[]
+  
+  userRoles     UserRole[]
+  adminUser     AdminUser?
+  couponUses    CouponUse[]
+  savedUpis     SavedUPI[]
+}
+
+model Session {
+  id          String    @id @default(cuid())
+  userId      String
+  token       String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id            String    @id @default(cuid())
+  userId        String
+  label         String    @default("Home")   // Home / Work / Other
+  name          String                        // Recipient name
+  phone         String
+  line1         String
+  line2         String?
+  city          String
+  state         String
+  pincode       String
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]
+}
+
+// ─── PRODUCTS ─────────────────────────────────────────────
+
+model Product {
+  id              String      @id @default(cuid())
+  slug            String      @unique             // URL slug — auto-generated from name
+  name            String                          // Raw name entered by seller
+  displayName     String                          // AI-enhanced display name
+  description     String                          // AI-written SEO description (150-200 words)
+  shortDesc       String                          // One-liner for cards (50 chars max)
+  
+  // Classification
+  category        Category
+  metal           Metal       @default(NONE)
+  finish          Finish      @default(NONE)
+  
+  // Specifications
+  weightGrams     Float?                          // Physical weight
+  dimensions      String?                         // e.g. "Length: 18 inches"
+  stoneType       String?                         // e.g. "Kundan", "Ruby (glass)"
+  occasion        String?                         // e.g. "Bridal, Festive, Casual"
+  
+  // Pricing
+  priceINR        Int                             // Price in rupees as Int
+  originalPriceINR Int?                           // Strike-through price (if on discount)
+  
+  // Status
+  status          ItemStatus  @default(AVAILABLE)
+  reservedAt      DateTime?                       // When RESERVED state started
+  reservedByUserId String?                        // Who reserved it
+  soldAt          DateTime?
+  
+  // SEO
+  metaTitle       String?
+  metaDescription String?                         // 155 chars max
+  keywords        String[]                        // Array of SEO keywords
+  
+  // Images — stored on disk, paths in DB
+  images          ProductImage[]
+  primaryImageUrl String                          // Denormalised for fast card rendering
+  
+  // AI metadata
+  aiEnhanced      Boolean     @default(false)
+  rawInputData    Json?                           // Original seller input (for audit)
+  
+  // Timestamps
+  listedAt        DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  orders          Order[]
+  wishlistItems   WishlistItem[]
+  
+  tags            ProductTag[]
+  collections     CollectionProduct[]
+  views           ProductView[]
+  
+  @@index([status])
+  @@index([category])
+  @@index([metal])
+  @@index([priceINR])
+  @@index([slug])
+}
+
+model ProductImage {
+  id          String    @id @default(cuid())
+  productId   String
+  url         String                      // Relative path: /images/products/{productId}/{filename}
+  urlThumb    String                      // 300×300 WebP
+  urlMedium   String                      // 800×800 WebP
+  urlFull     String                      // 1600×1600 WebP
+  order       Int       @default(0)       // Display order (0 = primary)
+  altText     String?
+  
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ─── ORDERS ───────────────────────────────────────────────
+
+model Order {
+  id                String        @id @default(cuid())
+  orderNumber       String        @unique   // Human-readable: ORD-2024-0001
+  
+  userId            String
+  productId         String
+  addressId         String
+  
+  // Pricing snapshot (frozen at time of order)
+  priceINR          Int
+  shippingINR       Int           @default(0)
+  totalINR          Int
+  
+  couponCode        String?
+  couponDiscount    Int?
+  couponId          String?
+  
+  // Status
+  status            OrderStatus   @default(PENDING_PAYMENT)
+  
+  // Payment
+  paymentMethod     PaymentMethod?
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  razorpaySignature String?
+  paidAt            DateTime?
+  
+  // Shipping
+  courierName       String?
+  awbCode           String?       // Airway Bill Number — tracking ID
+  shiprocketOrderId String?
+  shiprocketShipmentId String?
+  trackingUrl       String?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+  
+  // Notes
+  buyerNote         String?       // Optional note from buyer at checkout
+  adminNote         String?
+  
+  hasUnreadMessages Boolean       @default(false)
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  user              User          @relation(fields: [userId], references: [id])
+  product           Product       @relation(fields: [productId], references: [id])
+  address           Address       @relation(fields: [addressId], references: [id])
+  invoice           Invoice?
+  couponUse         CouponUse?
+  messages          OrderMessage[]
+}
+
+model Invoice {
+  id          String    @id @default(cuid())
+  orderId     String    @unique
+  invoiceNo   String    @unique     // INV-2024-0001
+  pdfPath     String                // Local path to generated PDF
+  issuedAt    DateTime  @default(now())
+  
+  order       Order     @relation(fields: [orderId], references: [id])
+}
+
+// ─── WISHLIST ─────────────────────────────────────────────
+
+model WishlistItem {
+  id          String    @id @default(cuid())
+  userId      String
+  productId   String
+  addedAt     DateTime  @default(now())
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, productId])
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────
+
+model SiteSetting {
+  key         String    @id
+  value       String
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─── SEQUENCES ────────────────────────────────────────────
+
+model OrderSequence {
+  id      Int @id @default(1)
+  lastVal Int @default(0)
+}
+
+model InvoiceSequence {
+  id      Int @id @default(1)
+  lastVal Int @default(0)
+}
+
+// ─── PERMISSIONS & ROLES ──────────────────────────────────
+
+model Role {
+  id          String    @id @default(cuid())
+  name        String    @unique          // e.g. "Lister", "Order Manager"
+  description String?
+  color       String    @default("#888") // Hex — for UI badge
+  permissions Json                       // PermissionSet object stored as JSON
+  isDefault   Boolean   @default(false)  // Auto-assigned to new users
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  users       UserRole[]
+}
+
+model UserRole {
+  userId    String
+  roleId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+model AdminUser {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  username          String    @unique
+  permissionOverrides Json?   // Per-user overrides on top of role perms
+  createdAt         DateTime  @default(now())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── COUPONS & OFFERS ─────────────────────────────────────
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique     // e.g. "LAUNCH20" — always stored uppercase
+  description     String?
+  type            CouponType
+  value           Int                   // % off or ₹ off depending on type
+  minOrderINR     Int       @default(0) // Minimum order value to apply
+  maxUsesTotal    Int?                  // null = unlimited
+  maxUsesPerUser  Int       @default(1)
+  usedCount       Int       @default(0)
+  validFrom       DateTime  @default(now())
+  validUntil      DateTime?             // null = no expiry
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  uses            CouponUse[]
+}
+
+model CouponUse {
+  id        String   @id @default(cuid())
+  couponId  String
+  userId    String
+  orderId   String   @unique
+  usedAt    DateTime @default(now())
+
+  coupon    Coupon   @relation(fields: [couponId], references: [id])
+  order     Order    @relation(fields: [orderId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model SiteSale {
+  id            String    @id @default("1")   // Singleton — only one row ever
+  isActive      Boolean   @default(false)
+  label         String    @default("Sale")  // e.g. "Diwali Sale", "Weekend Offer"
+  discountPct   Int                         // e.g. 20 = 20% off all items
+  bannerText    String?                     // Announcement bar text during sale
+  startsAt      DateTime?
+  endsAt        DateTime?
+  updatedAt     DateTime  @updatedAt
+}
+
+// ─── COLLECTIONS & TAGS ───────────────────────────────────
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique   // e.g. "bestseller", "new", "bridal"
+  slug      String    @unique   // e.g. "bridal-collection"
+  products  ProductTag[]
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  @@id([productId, tagId])
+}
+
+model Collection {
+  id          String    @id @default(cuid())
+  name        String    @unique   // e.g. "Bridal Collection"
+  slug        String    @unique   // e.g. "bridal-collection"
+  description String?
+  bannerImageUrl String?
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    CollectionProduct[]
+}
+
+model CollectionProduct {
+  collectionId  String
+  productId     String
+  sortOrder     Int     @default(0)
+  collection    Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  @@id([collectionId, productId])
+}
+
+// ─── INTERNAL ANALYTICS ───────────────────────────────────
+
+model ProductView {
+  id        String   @id @default(cuid())
+  productId String
+  userId    String?  // null for anonymous
+  sessionId String?  // anonymous session ID from cookie
+  viewedAt  DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([viewedAt])
+}
+
+// ─── CUSTOMER MESSAGING ───────────────────────────────────
+
+model OrderMessage {
+  id        String      @id @default(cuid())
+  orderId   String
+  fromType  MessageFrom // CUSTOMER or ADMIN
+  fromId    String      // userId
+  body      String      // plain text, max 1000 chars
+  readAt    DateTime?   // null = unread
+  createdAt DateTime    @default(now())
+
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+// ─── SAVED PAYMENT METHODS (PCI COMPLIANT) ────────────────
+
+model SavedUPI {
+  id        String   @id @default(cuid())
+  userId    String
+  upiId     String   // The actual VPA address (e.g. user@okaxis)
+  label     String?  // Custom label (e.g. My PhonePe)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
