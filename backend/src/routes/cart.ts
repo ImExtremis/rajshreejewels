@@ -139,7 +139,7 @@ router.post(
   '/add',
   catchAsync(async (req: Request, res: Response) => {
     const { productId } = z.object({ productId: z.string() }).parse(req.body);
-    const key = resolveCartKey(req);
+    const key = resolveCartKey(req)!;
 
     // Verify product exists and is AVAILABLE
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -176,7 +176,7 @@ router.delete(
   '/remove/:productId',
   catchAsync(async (req: Request, res: Response) => {
     const { productId } = req.params;
-    const key = resolveCartKey(req);
+    const key = resolveCartKey(req)!;
 
     const cart = await getCart(key);
 
@@ -198,7 +198,7 @@ router.delete(
 router.post(
   '/clear',
   catchAsync(async (req: Request, res: Response) => {
-    const key = resolveCartKey(req);
+    const key = resolveCartKey(req)!;
 
     if (redis.isOpen) {
       await redis.del(key);
@@ -216,7 +216,7 @@ router.post(
     
     // Resolve user's cart key (must be authenticated)
     const userKey = resolveCartKey(req);
-    if (!userKey.startsWith('cart:')) {
+    if (!userKey || !userKey.startsWith('cart:')) {
       throw new AppError('User authentication token required for merge operation', 401, 'UNAUTHORIZED');
     }
 
@@ -254,7 +254,7 @@ router.post(
   '/apply-coupon',
   catchAsync(async (req: any, res: Response) => {
     const { code } = z.object({ code: z.string() }).parse(req.body);
-    const key = resolveCartKey(req);
+    const key = resolveCartKey(req)!;
     const userId = req.user?.id;
     if (!userId) {
       throw new AppError('Authentication required to apply coupon', 401, 'UNAUTHORIZED');
@@ -354,7 +354,7 @@ router.post(
 router.delete(
   '/remove-coupon',
   catchAsync(async (req: Request, res: Response) => {
-    const key = resolveCartKey(req);
+    const key = resolveCartKey(req)!;
     const cart = await getCart(key);
     
     if (cart.coupon) {
