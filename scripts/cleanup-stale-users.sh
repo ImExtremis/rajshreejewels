@@ -2,10 +2,12 @@
 # Removes unverified users with no orders who registered more than 24 hours ago
 # Safe to run during development to clean test data
 
-docker compose exec -T postgres psql -U ${DB_USER:-jewellery_user} -d jewellery_store -c "
-DELETE FROM \"User\" 
-WHERE \"isVerified\" = false 
+source .env 2>/dev/null
+
+docker compose exec -T postgres psql -U ${DB_USER:-postgres} -d jewellery_store -c "
+DELETE FROM \"User\"
+WHERE \"isVerified\" = false
 AND \"createdAt\" < NOW() - INTERVAL '24 hours'
-AND id NOT IN (SELECT \"userId\" FROM \"Order\");
+AND id NOT IN (SELECT DISTINCT \"userId\" FROM \"Order\" WHERE \"userId\" IS NOT NULL);
 "
-echo "Stale unverified users cleaned."
+echo "✅ Stale unverified users cleaned."

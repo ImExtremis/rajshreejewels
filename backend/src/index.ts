@@ -41,27 +41,19 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,  // Needed for Razorpay
 }));
 
-// CORS — dynamic resolution supporting development hosts and local network IPs
-const allowedOrigins = [
-  config.FRONTEND_URL,
-  config.ADMIN_URL,
-  'http://localhost:3000',
-  'http://localhost:3001',
-];
-
 const localIpRegex = /^https?:\/\/(?:localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(?::\d+)?$/;
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) {
-      callback(null, true);
-      return;
-    }
-    const isAllowed = allowedOrigins.includes(origin) || localIpRegex.test(origin);
-    if (isAllowed) {
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    const allowed = [
+      process.env.FRONTEND_URL,
+      process.env.ADMIN_URL,
+    ].filter(Boolean);
+    if (allowed.includes(origin) || localIpRegex.test(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`CORS blocked: ${origin}`));
     }
   },
   credentials: true,

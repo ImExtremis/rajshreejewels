@@ -7,7 +7,7 @@ set -e
 # Configuration
 BACKUP_DIR="/data/backups"
 DB_CONTAINER="postgres" # Name of Postgres service in docker-compose
-DB_NAME="jewellery_db"
+DB_NAME="jewellery_store"
 DB_USER="postgres"
 ASSETS_DIR="/data/images/products"
 RETENTION_DAYS=7

@@ -76,3 +76,9 @@ Expose your local server securely through Cloudflare (without public IP configur
 **Requires:** Docker containers running (postgres and backend).
 **Warning:** Resets password immediately. Tell the user to change it again after logging in.
 
+### `scripts/cleanup-stale-users.sh`
+**What:** Purges stale unverified users who registered more than 24 hours ago and have no associated orders.
+**When:** Safe to run during development or staging to clean out test registers.
+**How:** `bash scripts/cleanup-stale-users.sh`
+**Requires:** Docker containers running (postgres).
+
