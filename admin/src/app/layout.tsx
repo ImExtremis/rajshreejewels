@@ -239,7 +239,9 @@ export default function RootLayout({
                 <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', fontSize: '13px', borderRadius: '2px', marginBottom: '20px', textAlign: 'center' }}>
                   {loginError.toUpperCase()}
                 </div>
-                            <form onSubmit={handleLogin}>
+              )}
+
+              <form onSubmit={handleLogin}>
                 <div style={{ marginBottom: '20px' }}>
                   <label style={{ display: 'block', fontSize: '10px', color: '#666', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.5px' }}>Email or Username</label>
                   <input
