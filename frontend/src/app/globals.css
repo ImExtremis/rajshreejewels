@@ -1,0 +1,72 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Primary palette */
+  --color-primary: #1a0a0a;           /* Deep warm black */
+  --color-accent: #C9A84C;            /* Gold */
+  --color-accent-light: #E8C97A;      /* Light gold hover */
+  --color-accent-red: #8B1A1A;        /* Deep red */
+  --color-accent-red-light: #B22222;  /* Red hover */
+  
+  /* Backgrounds */
+  --color-surface: #FFFDF8;           /* Warm white */
+  --color-surface-2: #FFF5F5;         /* Cream with red tint */
+  --color-surface-3: #FDF0E0;         /* Warm cream */
+  
+  /* Borders */
+  --color-border: #E8D5C4;            /* Warm cream border */
+  --color-border-red: #D4A0A0;        /* Red-tinted border */
+  
+  /* Text */
+  --color-text: #1a0a0a;
+  --color-text-muted: #7a5c5c;        /* Warm muted */
+  
+  /* Status */
+  --color-success: #2D7A3A;
+  --color-error: #8B1A1A;
+  --color-sold: #9CA3AF;
+  
+  /* Component tokens */
+  --shadow-card: 0 2px 16px rgba(139, 26, 26, 0.08);
+  --radius-card: 8px;
+
+  /* Typographic anchors */
+  --font-display: 'Cormorant Garamond', serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+body {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.mono-text {
+  font-family: var(--font-mono);
+}
+
+/* Custom premium transitions and overlays */
+.luxury-btn {
+  background-color: var(--color-primary);
+  color: var(--color-surface);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.luxury-btn:hover {
+  background-color: var(--color-accent-red);
+  color: #fff;
+}
+
+.gold-glow:hover {
+  box-shadow: 0 4px 20px rgba(139, 26, 26, 0.12);
+}

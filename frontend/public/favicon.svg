@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="gold-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37" />
+      <stop offset="50%" stop-color="#F3E5AB" />
+      <stop offset="100%" stop-color="#AA7C11" />
+    </linearGradient>
+  </defs>
+  <!-- Diamond Icon -->
+  <path d="M 32,4 L 56,28 L 32,56 L 8,28 Z" fill="url(#gold-grad)" stroke="#fff" stroke-width="1"/>
+  <path d="M 32,4 L 32,56 M 8,28 L 56,28" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+  <circle cx="32" cy="28" r="4" fill="#fff"/>
+</svg>
