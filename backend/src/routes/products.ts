@@ -25,7 +25,11 @@ router.get(
   catchAsync(async (req: Request, res: Response) => {
     const cleanedQuery = { ...req.query };
     for (const key in cleanedQuery) {
-      if (cleanedQuery[key] === '') {
+      if (
+        cleanedQuery[key] === '' ||
+        cleanedQuery[key] === 'ALL' ||
+        (key === 'minPrice' && cleanedQuery[key] === '0')
+      ) {
         delete cleanedQuery[key];
       }
     }

@@ -89,8 +89,8 @@ function ShopContent() {
 
   // Filter States
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedMetal, setSelectedMetal] = useState<string>('');
-  const [selectedFinish, setSelectedFinish] = useState<string>('');
+  const [selectedMetal, setSelectedMetal] = useState<string>('ALL');
+  const [selectedFinish, setSelectedFinish] = useState<string>('ALL');
   const [priceRange, setPriceRange] = useState<number>(5000);
   const [sortOrder, setSortOrder] = useState<string>('newest');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -109,8 +109,8 @@ function ShopContent() {
     const q = searchParams.get('search');
 
     setSelectedCategories(cat ? cat.split(',') : []);
-    setSelectedMetal(metal || '');
-    setSelectedFinish(finish || '');
+    setSelectedMetal(metal || 'ALL');
+    setSelectedFinish(finish || 'ALL');
     setPriceRange(maxPrice ? Number(maxPrice) : 5000);
     setSortOrder(sort || 'newest');
     setSearchTerm(q || '');
@@ -121,15 +121,15 @@ function ShopContent() {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const queryParts = [];
-        if (selectedCategories.length > 0) queryParts.push(`category=${selectedCategories.join(',')}`);
-        if (selectedMetal) queryParts.push(`metal=${selectedMetal}`);
-        if (selectedFinish) queryParts.push(`finish=${selectedFinish}`);
-        if (priceRange < 5000) queryParts.push(`maxPrice=${priceRange}`);
-        if (sortOrder) queryParts.push(`sort=${sortOrder}`);
-        if (searchTerm) queryParts.push(`search=${encodeURIComponent(searchTerm)}`);
+        const params = new URLSearchParams();
+        if (selectedCategories.length > 0) params.set('category', selectedCategories.join(','));
+        if (selectedMetal && selectedMetal !== 'ALL') params.set('metal', selectedMetal);
+        if (selectedFinish && selectedFinish !== 'ALL') params.set('finish', selectedFinish);
+        if (priceRange < 5000) params.set('maxPrice', String(priceRange));
+        if (sortOrder) params.set('sort', sortOrder);
+        if (searchTerm) params.set('search', searchTerm);
 
-        const queryStr = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+        const queryStr = params.toString() ? `?${params.toString()}` : '';
         const res = await fetch(`/api/v1/products${queryStr}`);
         if (res.ok) {
           const data = await res.json();
@@ -153,10 +153,10 @@ function ShopContent() {
     if (selectedCategories.length > 0) {
       filtered = filtered.filter(p => selectedCategories.includes(p.category.toString()));
     }
-    if (selectedMetal) {
+    if (selectedMetal && selectedMetal !== 'ALL') {
       filtered = filtered.filter(p => p.metal.toString() === selectedMetal);
     }
-    if (selectedFinish) {
+    if (selectedFinish && selectedFinish !== 'ALL') {
       filtered = filtered.filter(p => p.finish.toString() === selectedFinish);
     }
     filtered = filtered.filter(p => p.priceINR <= priceRange);
@@ -179,8 +179,8 @@ function ShopContent() {
 
   const clearFilters = () => {
     setSelectedCategories([]);
-    setSelectedMetal('');
-    setSelectedFinish('');
+    setSelectedMetal('ALL');
+    setSelectedFinish('ALL');
     setPriceRange(5000);
     setSearchTerm('');
     router.push('/shop');
@@ -263,7 +263,7 @@ function ShopContent() {
                 onChange={(e) => setSelectedMetal(e.target.value)}
                 className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
               >
-                <option value="">All Metals</option>
+                <option value="ALL">All Metals</option>
                 {Object.keys(Metal).map((m) => (
                   <option key={m} value={m}>{m.replace('_', ' ')}</option>
                 ))}
@@ -278,7 +278,7 @@ function ShopContent() {
                 onChange={(e) => setSelectedFinish(e.target.value)}
                 className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
               >
-                <option value="">All Finishes</option>
+                <option value="ALL">All Finishes</option>
                 {Object.keys(Finish).map((f) => (
                   <option key={f} value={f}>{f.replace('_', ' ')}</option>
                 ))}
@@ -370,7 +370,7 @@ function ShopContent() {
                   onChange={(e) => setSelectedMetal(e.target.value)}
                   className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
                 >
-                  <option value="">All Metals</option>
+                  <option value="ALL">All Metals</option>
                   {Object.keys(Metal).map((m) => (
                     <option key={m} value={m}>{m.replace('_', ' ')}</option>
                   ))}
@@ -385,7 +385,7 @@ function ShopContent() {
                   onChange={(e) => setSelectedFinish(e.target.value)}
                   className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
                 >
-                  <option value="">All Finishes</option>
+                  <option value="ALL">All Finishes</option>
                   {Object.keys(Finish).map((f) => (
                     <option key={f} value={f}>{f.replace('_', ' ')}</option>
                   ))}

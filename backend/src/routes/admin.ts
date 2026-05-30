@@ -271,7 +271,7 @@ router.post(
     await prisma.adminUser.create({
       data: {
         userId: user.id,
-        username: body.username,
+        username: body.username.toLowerCase().trim(),
         permissionOverrides: {}
       }
     });
@@ -1320,7 +1320,12 @@ router.post(
     const body = inviteSchema.parse(req.body);
 
     const existing = await prisma.user.findFirst({
-      where: { OR: [{ email: body.email }, { adminUser: { username: body.username } }] }
+      where: {
+        OR: [
+          { email: { equals: body.email.toLowerCase().trim(), mode: 'insensitive' } },
+          { adminUser: { username: { equals: body.username.toLowerCase().trim(), mode: 'insensitive' } } }
+        ]
+      }
     });
     if (existing) {
       return res.status(400).json({ error: 'EMAIL_OR_USERNAME_EXISTS', message: 'User already exists' });
@@ -1332,7 +1337,7 @@ router.post(
     const user = await prisma.user.create({
       data: {
         name: body.name,
-        email: body.email,
+        email: body.email.toLowerCase().trim(),
         passwordHash,
         isAdmin: true,
         isVerified: true,
@@ -1343,7 +1348,7 @@ router.post(
     await prisma.adminUser.create({
       data: {
         userId: user.id,
-        username: body.username,
+        username: body.username.toLowerCase().trim(),
         permissionOverrides: {}
       }
     });

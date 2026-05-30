@@ -333,11 +333,23 @@ router.post(
 
     let user = null;
     if (isEmail) {
-      user = await prisma.user.findUnique({ where: { email: identifier.toLowerCase() } });
+      user = await prisma.user.findFirst({
+        where: {
+          email: {
+            equals: identifier.toLowerCase(),
+            mode: 'insensitive',
+          }
+        }
+      });
     } else {
-      // Find by username via AdminUser record
-      const adminUser = await prisma.adminUser.findUnique({
-        where: { username: identifier },
+      // Find by username via AdminUser record — case-insensitive
+      const adminUser = await prisma.adminUser.findFirst({
+        where: {
+          username: {
+            equals: identifier,
+            mode: 'insensitive',  // PostgreSQL case-insensitive match
+          }
+        },
         include: { user: true }
       });
       user = adminUser?.user;

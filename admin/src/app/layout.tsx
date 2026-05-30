@@ -218,7 +218,7 @@ export default function RootLayout({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'IBM Plex Mono, monospace', color: '#e0e0e0' }}>
             <div style={{ width: '400px', padding: '30px', background: '#111', border: '1px solid #222', borderRadius: '4px' }}>
               <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <img src="/logo.png" alt="Rajshree Jewels Logo" style={{ height: '64px', width: 'auto', margin: '0 auto 15px auto', display: 'block' }} />
+                <img src="/logo.png" alt="Rajshree Jewels Logo" className="rounded-lg" style={{ height: '64px', width: 'auto', margin: '0 auto 15px auto', display: 'block', borderRadius: '8px' }} />
                 <h1 style={{ color: '#C9A84C', fontSize: '20px', letterSpacing: '2px', fontWeight: 'bold', margin: '0 0 5px 0' }}>RAJSHREE JEWELS</h1>
                 <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Admin Operations Center</p>
               </div>
@@ -271,6 +271,10 @@ export default function RootLayout({
                 </button>
               </form>
             </div>
+            {/* Haste Industries Attribution — subtle */}
+            <p className="text-[10px] text-[#2a2a2a] font-mono tracking-widest text-center mt-8 select-none">
+              RAJSHREE JEWELS ADMIN · POWERED BY HASTE INDUSTRIES
+            </p>
           </div>
         </body>
       </html>
@@ -293,7 +297,7 @@ export default function RootLayout({
           {/* Left Sidebar Navigation */}
           <aside className="sidebar">
             <div className="sidebar-header" style={{ textAlign: 'center', padding: '20px 15px' }}>
-              <img className="sidebar-logo" src="/logo.png" alt="Rajshree Jewels Logo" style={{ height: '48px', width: 'auto', margin: '0 auto 10px auto', display: 'block' }} />
+              <img className="sidebar-logo rounded-lg" src="/logo.png" alt="Rajshree Jewels Logo" style={{ height: '48px', width: 'auto', margin: '0 auto 10px auto', display: 'block', borderRadius: '8px' }} />
               <h1 className="sidebar-title" style={{ fontSize: '15px', margin: 0 }}>RAJSHREE JEWELS</h1>
               <div style={{ fontSize: '9px', color: '#666', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }} className="sidebar-logo">
                 {isOwner ? 'OWNER PANEL' : 'ADMIN PANEL'}
@@ -401,6 +405,15 @@ export default function RootLayout({
               >
                 <span>Logout</span>
               </button>
+              {/* Haste Industries Attribution — subtle */}
+              <div className="px-4 py-3 border-t border-[#1a1a1a] mt-4" style={{ backgroundColor: '#0a0a0a' }}>
+                <p className="text-[10px] text-[#333] font-mono tracking-widest uppercase text-center" style={{ margin: 0 }}>
+                  Built by
+                </p>
+                <p className="text-[10px] text-[#444] font-mono tracking-widest uppercase text-center mt-0.5" style={{ margin: 0 }}>
+                  Haste Industries
+                </p>
+              </div>
             </div>
           </aside>
 

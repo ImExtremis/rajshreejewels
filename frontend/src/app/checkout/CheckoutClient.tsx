@@ -6,6 +6,8 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { trackEvent } from '../../lib/analytics';
+import { useSession } from 'next-auth/react';
+import { apiClient } from '../../lib/api';
 
 interface Address {
   id: string;
@@ -66,6 +68,8 @@ type CheckoutStep = 'address' | 'review' | 'payment';
 export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken || sessionUser.accessToken;
   const targetProductId = searchParams.get('productId');
 
   // Steps state
@@ -194,9 +198,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
         setSettings(settingsData);
 
         // 2. Fetch user details (including verified status and shipping addresses)
-        const userRes = await fetch('/api/v1/users/me', {
-          headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-        });
+        const userRes = await apiClient('/users/me', {}, token);
         if (userRes.ok) {
           const userData = await userRes.json();
           setIsVerified(userData.isVerified);
@@ -217,9 +219,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
         }
 
         // 4. Fetch Cart to get active coupon details and fallback product
-        const cartRes = await fetch('/api/v1/cart', {
-          headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-        });
+        const cartRes = await apiClient('/cart', {}, token);
         if (cartRes.ok) {
           const cartData = await cartRes.json();
           if (cartData.coupon) {
@@ -268,23 +268,17 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const onAddressSubmit = async (data: AddressFields) => {
     try {
       setSavingAddress(true);
-      const res = await fetch('/api/v1/users/me/addresses', {
+      const res = await apiClient('/users/me/addresses', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`
-        },
         body: JSON.stringify(data),
-      });
+      }, token);
 
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.message || 'Failed to add address');
       }
 
-      const freshAddrsRes = await fetch('/api/v1/users/me/addresses', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-      });
+      const freshAddrsRes = await apiClient('/users/me/addresses', {}, token);
       if (freshAddrsRes.ok) {
         const freshData = await freshAddrsRes.json();
         const list = freshData.addresses || [];
@@ -335,19 +329,15 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
 
     try {
       setPlacingOrder(true);
-      const res = await fetch('/api/v1/orders/initiate', {
+      const res = await apiClient('/orders/initiate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`
-        },
         body: JSON.stringify({
           productId: product.id,
           addressId: selectedAddressId,
           paymentMethod: isCod ? 'COD' : 'UPI',
           buyerNote: buyerNote.trim() || undefined
         })
-      });
+      }, token);
 
       const data = await res.json();
       if (!res.ok) {
@@ -390,10 +380,9 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
         });
 
         // Clear user's local cart
-        await fetch('/api/v1/cart/clear', {
+        await apiClient('/cart/clear', {
           method: 'POST',
-          headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-        });
+        }, token);
         
         router.push(`/account/orders/${data.orderId}?success=true`);
         return;
@@ -436,19 +425,15 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
         handler: async (response: any) => {
           try {
             setPlacingOrder(true);
-            const confirmRes = await fetch('/api/v1/orders/confirm-payment', {
+            const confirmRes = await apiClient('/orders/confirm-payment', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${sessionUser.accessToken}`
-              },
               body: JSON.stringify({
                 orderId: data.orderId,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpayOrderId: response.razorpay_order_id,
                 razorpaySignature: response.razorpay_signature,
               })
-            });
+            }, token);
 
             const confirmData = await confirmRes.json();
             if (!confirmRes.ok) {
@@ -474,10 +459,9 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
             }
 
             // Clear local cart
-            await fetch('/api/v1/cart/clear', {
+            await apiClient('/cart/clear', {
               method: 'POST',
-              headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-            });
+            }, token);
 
             router.push(`/account/orders/${confirmData.orderId}?success=true`);
           } catch (err: any) {
@@ -506,14 +490,10 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
       setCouponLoading(true);
       setCouponError(null);
       
-      const res = await fetch('/api/v1/cart/apply-coupon', {
+      const res = await apiClient('/cart/apply-coupon', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`
-        },
         body: JSON.stringify({ code: couponCode.trim() })
-      });
+      }, token);
       
       const data = await res.json();
       if (!res.ok) {
@@ -539,12 +519,9 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const handleRemoveCoupon = async () => {
     try {
       setCouponLoading(true);
-      const res = await fetch('/api/v1/cart/remove-coupon', {
+      const res = await apiClient('/cart/remove-coupon', {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${sessionUser.accessToken}`
-        }
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed to remove coupon');
       setAppliedCoupon(null);
       triggerAlert('Coupon removed successfully');

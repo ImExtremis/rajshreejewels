@@ -74,65 +74,75 @@ const saveCart = async (key: string, cart: Cart): Promise<void> => {
 };
 
 // ─── GET /cart ──────────────────────────────────────────────
-router.get(
-  '/',
-  catchAsync(async (req: Request, res: Response) => {
-    const key = resolveCartKey(req, false);
-    if (!key) {
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    let userId = req.user?.id;
+    if (!userId) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const token = authHeader.split(' ')[1];
+          const payload = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
+          userId = payload.userId;
+        } catch (_) {}
+      }
+    }
+    const sessionId = req.headers['x-session-id'] as string;
+
+    // If neither auth nor session — return empty cart, not 400
+    if (!userId && !sessionId) {
+      return res.json({
+        items: [],
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    const cartKey = userId ? `cart:${userId}` : `cart:guest:${sessionId}`;
+    const cartData = await redis.get(cartKey);
+
+    if (!cartData) {
       return res.json({ items: [], updatedAt: new Date().toISOString() });
     }
-    const cart = await getCart(key);
 
-    if (cart.items.length === 0) {
-      return res.json({ items: [], updatedAt: cart.updatedAt });
-    }
+    const cart = JSON.parse(cartData);
 
-    // Join products from database
-    const productIds = cart.items.map((item) => item.productId);
-    const products = await prisma.product.findMany({
-      where: { id: { in: productIds } },
-      include: {
-        images: {
-          orderBy: { order: 'asc' },
-          take: 1,
-        },
-      },
-    });
+    // Enrich cart items with product data
+    const enrichedItems = await Promise.all(
+      cart.items.map(async (item: any) => {
+        const product = await prisma.product.findUnique({
+          where: { id: item.productId },
+          select: {
+            id: true,
+            slug: true,
+            displayName: true,
+            shortDesc: true,
+            priceINR: true,
+            originalPriceINR: true,
+            primaryImageUrl: true,
+            status: true,
+            category: true,
+          }
+        });
 
-    // Map items to inject product details and check for availability issues
-    const joinedItems = cart.items.map((cartItem) => {
-      const product = products.find((p) => p.id === cartItem.productId);
+        if (!product) return null;
 
-      if (!product) {
         return {
-          productId: cartItem.productId,
-          addedAt: cartItem.addedAt,
-          cartError: 'ITEM_NOT_FOUND',
+          ...item,
+          product,
+          cartError: product.status !== 'AVAILABLE' ? 'ITEM_SOLD' : null,
         };
-      }
+      })
+    );
 
-      let cartError: string | null = null;
-      if (product.status === ItemStatus.SOLD) {
-        cartError = 'ITEM_SOLD';
-      } else if (product.status === ItemStatus.UNLISTED) {
-        cartError = 'ITEM_UNLISTED';
-      }
-
-      return {
-        productId: cartItem.productId,
-        addedAt: cartItem.addedAt,
-        cartError,
-        product,
-      };
-    });
-
-    res.json({
-      items: joinedItems,
+    return res.json({
+      items: enrichedItems.filter(Boolean),
       updatedAt: cart.updatedAt,
       coupon: cart.coupon,
     });
-  })
-);
+  } catch (err) {
+    return res.status(500).json({ error: 'CART_ERROR' });
+  }
+});
 
 // ─── POST /cart/add ─────────────────────────────────────────
 router.post(

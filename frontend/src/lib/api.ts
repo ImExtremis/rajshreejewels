@@ -91,3 +91,44 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
 
   return response.json() as Promise<T>;
 }
+
+// Client-side fetch with auto auth
+export async function apiClient(
+  endpoint: string,
+  options: RequestInit = {},
+  accessToken?: string
+): Promise<Response> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...options.headers,
+  };
+
+  const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  // Handle 401 — token expired
+  if (res.status === 401) {
+    // Try refresh
+    try {
+      const refreshRes = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (refreshRes.ok) {
+        const { accessToken: newToken } = await refreshRes.json();
+        // Retry with new token
+        return fetch(`${API_BASE_URL}${endpoint}`, {
+          ...options,
+          headers: { ...headers, Authorization: `Bearer ${newToken}` },
+        });
+      }
+    } catch {
+      // Refresh failed — return original 401
+    }
+  }
+
+  return res;
+}

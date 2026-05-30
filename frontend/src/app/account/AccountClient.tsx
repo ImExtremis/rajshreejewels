@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import ProductCard from '../../components/product/ProductCard';
 import { Product } from '../../types';
+import { apiClient } from '../../lib/api';
 
 interface Address {
   id: string;
@@ -53,6 +54,8 @@ type ProfileFields = z.infer<typeof profileSchema>;
 type AddressFields = z.infer<typeof addressSchema>;
 
 export default function AccountClient({ sessionUser }: AccountClientProps) {
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken || sessionUser.accessToken;
   const [activeTab, setActiveTab] = useState<'profile' | 'addresses' | 'orders' | 'wishlist' | 'payment-methods'>('profile');
   const [user, setUser] = useState(sessionUser);
   const [addresses, setAddresses] = useState<Address[]>([]);
@@ -72,9 +75,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const fetchPaymentMethods = async () => {
     setUpisLoading(true);
     try {
-      const res = await fetch('/api/v1/users/me/payment-methods', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      const res = await apiClient('/users/me/payment-methods', {}, token);
       if (res.ok) {
         const data = await res.json();
         setSavedUpis(data.savedUpis || []);
@@ -96,14 +97,10 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/users/me/payment-methods', {
+      const res = await apiClient('/users/me/payment-methods', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`,
-        },
         body: JSON.stringify({ upiId: newUpiId.trim(), label: newUpiLabel.trim() || undefined }),
-      });
+      }, token);
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to save UPI handle');
       
@@ -122,10 +119,9 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
     if (!confirm('Are you sure you want to delete this saved UPI handle?')) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/users/me/payment-methods/${id}`, {
+      const res = await apiClient(`/users/me/payment-methods/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed to delete payment method');
       triggerAlert('Payment method deleted successfully');
       fetchPaymentMethods();
@@ -139,10 +135,9 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const handleSetDefaultUpi = async (id: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/v1/users/me/payment-methods/${id}/default`, {
+      const res = await apiClient(`/users/me/payment-methods/${id}/default`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed to set default payment method');
       triggerAlert('✨ Default payment method updated');
       fetchPaymentMethods();
@@ -184,9 +179,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
 
   const fetchFreshUser = async () => {
     try {
-      const res = await fetch('/api/v1/users/me', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      const res = await apiClient('/users/me', {}, token);
       if (res.ok) {
         const data = await res.json();
         setUser((prev) => ({
@@ -266,9 +259,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const fetchOrders = async () => {
     setOrdersLoading(true);
     try {
-      const res = await fetch('/api/v1/orders/my', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      const res = await apiClient('/orders/my', {}, token);
       if (res.ok) {
         const data = await res.json();
         setOrders(data || []);
@@ -284,9 +275,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
 
   const fetchAddresses = async () => {
     try {
-      const res = await fetch('/api/v1/users/me', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      const res = await apiClient('/users/me', {}, token);
       if (res.ok) {
         const data = await res.json();
         setAddresses(data.addresses || []);
@@ -299,9 +288,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
 
   const fetchWishlist = async () => {
     try {
-      const res = await fetch('/api/v1/users/me/wishlist', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      const res = await apiClient('/users/me/wishlist', {}, token);
       if (res.ok) {
         const data = await res.json();
         setWishlist(data || []);
@@ -313,14 +300,10 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const onProfileSubmit = async (data: ProfileFields) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/users/me', {
+      const res = await apiClient('/users/me', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`,
-        },
         body: JSON.stringify(data),
-      });
+      }, token);
 
       if (!res.ok) throw new Error('Failed to update profile');
       const updated = await res.json();
@@ -337,20 +320,16 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const onAddressSubmit = async (data: AddressFields) => {
     setLoading(true);
     try {
-      const url = editingAddressId
-        ? `/api/v1/users/me/addresses/${editingAddressId}`
-        : '/api/v1/users/me/addresses';
+      const endpoint = editingAddressId
+        ? `/users/me/addresses/${editingAddressId}`
+        : '/users/me/addresses';
 
       const method = editingAddressId ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      const res = await apiClient(endpoint, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`,
-        },
         body: JSON.stringify(data),
-      });
+      }, token);
 
       if (!res.ok) throw new Error('Failed to save address');
       
@@ -384,10 +363,9 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   // Set default address
   const handleSetDefaultAddress = async (id: string) => {
     try {
-      const res = await fetch(`/api/v1/users/me/addresses/${id}/default`, {
+      const res = await apiClient(`/users/me/addresses/${id}/default`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed');
       triggerAlert('Default address updated!');
       fetchAddresses();
@@ -400,10 +378,9 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const handleDeleteAddress = async (id: string) => {
     if (!confirm('Are you sure you want to delete this address?')) return;
     try {
-      const res = await fetch(`/api/v1/users/me/addresses/${id}`, {
+      const res = await apiClient(`/users/me/addresses/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed');
       triggerAlert('Address deleted successfully!');
       fetchAddresses();
@@ -415,10 +392,9 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   // Remove from Wishlist
   const handleRemoveWishlist = async (productId: string) => {
     try {
-      const res = await fetch(`/api/v1/users/me/wishlist/${productId}`, {
+      const res = await apiClient(`/users/me/wishlist/${productId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` },
-      });
+      }, token);
       if (!res.ok) throw new Error('Failed');
       triggerAlert('Item removed from wishlist');
       fetchWishlist();

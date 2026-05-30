@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { apiClient } from '../../lib/api';
 
 interface Product {
   id: string;
@@ -33,6 +35,8 @@ interface WishlistClientProps {
 
 export default function WishlistClient({ sessionUser }: WishlistClientProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken || sessionUser.accessToken;
 
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,9 +54,7 @@ export default function WishlistClient({ sessionUser }: WishlistClientProps) {
       setLoading(true);
       setError(null);
 
-      const res = await fetch('/api/v1/users/me/wishlist', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-      });
+      const res = await apiClient('/users/me/wishlist', {}, token);
       if (!res.ok) throw new Error('Failed to retrieve your wishlist items.');
 
       const data = await res.json();
@@ -72,10 +74,9 @@ export default function WishlistClient({ sessionUser }: WishlistClientProps) {
   const handleRemove = async (productId: string) => {
     try {
       setRemovingId(productId);
-      const res = await fetch(`/api/v1/users/me/wishlist/${productId}`, {
+      const res = await apiClient(`/users/me/wishlist/${productId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-      });
+      }, token);
 
       if (!res.ok) throw new Error('Failed to remove item');
 

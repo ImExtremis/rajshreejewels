@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
+import { apiClient } from '../../lib/api';
 
 interface Product {
   id: string;
@@ -41,6 +43,8 @@ interface CartClientProps {
 
 export default function CartClient({ sessionUser }: CartClientProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const token = (session as any)?.accessToken || sessionUser.accessToken;
   
   const [items, setItems] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
@@ -67,9 +71,7 @@ export default function CartClient({ sessionUser }: CartClientProps) {
       }
 
       // Fetch cart items
-      const cartRes = await fetch('/api/v1/cart', {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-      });
+      const cartRes = await apiClient('/cart', {}, token);
       if (!cartRes.ok) throw new Error('Failed to retrieve your cart items.');
       
       const cartData = await cartRes.json();
@@ -89,10 +91,9 @@ export default function CartClient({ sessionUser }: CartClientProps) {
   const handleRemove = async (productId: string) => {
     try {
       setRemovingId(productId);
-      const res = await fetch(`/api/v1/cart/remove/${productId}`, {
+      const res = await apiClient(`/cart/remove/${productId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
-      });
+      }, token);
 
       if (!res.ok) throw new Error('Failed to remove item');
 
