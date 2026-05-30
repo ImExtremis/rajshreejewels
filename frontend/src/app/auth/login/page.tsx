@@ -38,7 +38,12 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setError(res.error || 'Invalid credentials entered');
+        const errorMessages: Record<string, string> = {
+          'CredentialsSignin': 'Invalid email or password.',
+          'MissingCSRF': 'Session expired. Please try again.',
+          'Default': 'Invalid credentials entered.',
+        };
+        setError(errorMessages[res.error] || errorMessages['Default']);
       } else {
         router.push(redirectPath);
         router.refresh();

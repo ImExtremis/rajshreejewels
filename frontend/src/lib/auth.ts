@@ -59,7 +59,7 @@ export const authOptions = {
   },
   pages: {
     signIn: '/auth/login',
-    error: '/auth/login',
+    error: '/auth/error',
   },
   session: { strategy: 'jwt' as const },
   secret: process.env.NEXTAUTH_SECRET,

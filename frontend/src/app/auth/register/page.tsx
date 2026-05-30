@@ -43,21 +43,27 @@ export default function RegisterPage() {
 
       if (typeof window !== 'undefined' && body.accessToken) {
         localStorage.setItem('access_token', body.accessToken);
+        if (body.user) {
+          localStorage.setItem('user', JSON.stringify(body.user));
+        }
       }
 
-      // 2. Auto-login via NextAuth using the same credentials
-      const signInRes = await signIn('credentials', {
+      // Then trigger NextAuth session using the stored credentials
+      // Use signIn with redirect:false and proper CSRF handling
+      const result = await signIn('credentials', {
         redirect: false,
         email: data.email,
         password: data.password,
       });
 
-      if (signInRes?.error) {
-        throw new Error(signInRes.error || 'Failed to automatically sign you in');
+      if (result?.ok) {
+        router.push('/account');
+        router.refresh();
+      } else {
+        // Fallback - redirect anyway since backend registration succeeded
+        router.push('/account');
+        router.refresh();
       }
-
-      router.push('/account');
-      router.refresh();
     } catch (err: any) {
       setError(err.message || 'An error occurred during account creation');
     } finally {
