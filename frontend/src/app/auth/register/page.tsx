@@ -11,8 +11,8 @@ import Link from 'next/link';
 const registerSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),
   email: z.string().trim().email('Please enter a valid email address'),
-  phone: z.string().trim().min(10, 'Phone must be at least 10 digits'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  phone: z.string().trim().min(10, 'Phone must be at least 10 digits').max(15).optional().or(z.literal('')),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 type RegisterFields = z.infer<typeof registerSchema>;
@@ -41,19 +41,19 @@ export default function RegisterPage() {
         throw new Error(body.error || 'Registration failed');
       }
 
-      // Automatically sign in the user into NextAuth now that registration succeeded
+      if (typeof window !== 'undefined' && body.accessToken) {
+        localStorage.setItem('access_token', body.accessToken);
+      }
+
+      // 2. Auto-login via NextAuth using the same credentials
       const signInRes = await signIn('credentials', {
-        accessToken: body.accessToken,
-        user: JSON.stringify(body.user),
         redirect: false,
+        email: data.email,
+        password: data.password,
       });
 
       if (signInRes?.error) {
         throw new Error(signInRes.error || 'Failed to automatically sign you in');
-      }
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('access_token', body.accessToken);
       }
 
       router.push('/account');
@@ -129,7 +129,7 @@ export default function RegisterPage() {
             <input
               type="password"
               {...register('password')}
-              placeholder="Min 6 characters"
+              placeholder="Min 8 characters"
               className="w-full bg-surface border border-border-custom rounded-card py-2.5 px-4 focus:outline-none focus:border-accent text-text"
             />
             {errors.password && (

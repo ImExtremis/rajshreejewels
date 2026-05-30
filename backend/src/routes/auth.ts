@@ -14,11 +14,12 @@ const router = Router();
 
 // Zod validation schemas
 const registerSchema = z.object({
-  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
   email: z.string().trim().email('Invalid email address'),
-  phone: z.string().trim().min(10, 'Phone must be at least 10 digits').optional(),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  phone: z.string().trim().min(10, 'Phone must be at least 10 digits').max(15).optional().or(z.literal('')),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
+
 
 const verifyEmailSchema = z.object({
   userId: z.string(),
@@ -81,7 +82,9 @@ const COOKIE_OPTIONS = {
 router.post(
   '/register',
   catchAsync(async (req: Request, res: Response) => {
-    const { name, email, phone, password } = registerSchema.parse(req.body);
+    const parsed = registerSchema.parse(req.body);
+    const { name, email, password } = parsed;
+    const phone = (parsed.phone && parsed.phone.trim() !== '') ? parsed.phone.trim() : undefined;
 
     // Before creating a new user — check if unverified user exists with this email
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -100,7 +103,7 @@ router.post(
         where: { id: existing.id },
         data: {
           name,
-          phone,
+          phone: phone || null,
           passwordHash,
         }
       });
@@ -169,7 +172,7 @@ router.post(
       data: {
         name,
         email,
-        phone,
+        phone: phone || null,
         passwordHash,
         isVerified: false,
       },
