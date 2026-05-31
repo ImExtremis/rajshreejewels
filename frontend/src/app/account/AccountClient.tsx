@@ -58,6 +58,8 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
   const token = (session as any)?.accessToken || sessionUser.accessToken;
   const [activeTab, setActiveTab] = useState<'profile' | 'addresses' | 'orders' | 'wishlist' | 'payment-methods'>('profile');
   const [user, setUser] = useState(sessionUser);
+  const [freshUser, setFreshUser] = useState<any | null>(null);
+  const isVerified = freshUser?.isVerified ?? session?.user?.isVerified ?? user.isVerified ?? false;
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [wishlist, setWishlist] = useState<Product[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -182,6 +184,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
       const res = await apiClient('/users/me', {}, token);
       if (res.ok) {
         const data = await res.json();
+        setFreshUser(data);
         setUser((prev) => ({
           ...prev,
           isVerified: data.isVerified,
@@ -209,6 +212,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
       
       // Fetch fresh user details to instantly refresh verified state in UI
       await fetchFreshUser();
+      setFreshUser((u: any) => u ? { ...u, isVerified: true } : u);
       triggerAlert('🎉 Email verified successfully!');
     } catch (err: any) {
       triggerAlert(err.message || 'Failed to verify OTP', 'error');
@@ -432,7 +436,7 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
         </button>
       </div>
 
-      {showBanner && !user.isVerified && (
+      {showBanner && !isVerified && freshUser !== null && (
         <div className="bg-[#FFF5F5] border border-[#D4A0A0] rounded-card p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm animate-fade-in font-body">
           <div className="space-y-1">
             <h4 className="text-sm font-semibold text-[#8B1A1A] uppercase tracking-wide">Email Verification Required</h4>

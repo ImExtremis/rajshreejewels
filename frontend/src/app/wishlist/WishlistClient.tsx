@@ -35,7 +35,7 @@ interface WishlistClientProps {
 
 export default function WishlistClient({ sessionUser }: WishlistClientProps) {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const token = (session as any)?.accessToken || sessionUser.accessToken;
 
   const [items, setItems] = useState<WishlistItem[]>([]);
@@ -68,8 +68,9 @@ export default function WishlistClient({ sessionUser }: WishlistClientProps) {
   };
 
   useEffect(() => {
+    if (status === 'loading') return;
     fetchWishlist();
-  }, [sessionUser.accessToken]);
+  }, [status, session, sessionUser.accessToken]);
 
   const handleRemove = async (productId: string) => {
     try {

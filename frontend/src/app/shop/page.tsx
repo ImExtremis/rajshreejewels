@@ -83,17 +83,61 @@ const mockCatalog: Product[] = [
   }
 ];
 
+interface ShopFilters {
+  category: string | null;
+  metal: string | null;
+  finish: string | null;
+  minPrice: number;
+  maxPrice: number;
+  search: string;
+  sort: string;
+}
+
+function buildProductsUrl(filters: ShopFilters, page: number): string {
+  const params = new URLSearchParams();
+  params.set('page', String(page));
+  params.set('limit', '24');
+  
+  // ONLY append if meaningful value
+  if (filters.category && filters.category !== '' && filters.category !== 'ALL') {
+    params.set('category', filters.category);
+  }
+  if (filters.metal && filters.metal !== '' && filters.metal !== 'ALL') {
+    params.set('metal', filters.metal);
+  }
+  if (filters.finish && filters.finish !== '' && filters.finish !== 'ALL') {
+    params.set('finish', filters.finish);
+  }
+  if (filters.minPrice && filters.minPrice > 0) {
+    params.set('minPrice', String(filters.minPrice));
+  }
+  if (filters.maxPrice && filters.maxPrice < 50000) {
+    params.set('maxPrice', String(filters.maxPrice));
+  }
+  if (filters.search && filters.search.trim() !== '') {
+    params.set('search', filters.search.trim());
+  }
+  if (filters.sort && filters.sort !== 'newest') {
+    params.set('sort', filters.sort);
+  }
+  
+  return `/api/v1/products?${params.toString()}`;
+}
+
 function ShopContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   // Filter States
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedMetal, setSelectedMetal] = useState<string>('ALL');
-  const [selectedFinish, setSelectedFinish] = useState<string>('ALL');
-  const [priceRange, setPriceRange] = useState<number>(5000);
-  const [sortOrder, setSortOrder] = useState<string>('newest');
-  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filters, setFilters] = useState<ShopFilters>({
+    category: null,
+    metal: null,
+    finish: null,
+    minPrice: 0,
+    maxPrice: 50000,
+    search: '',
+    sort: 'newest',
+  });
 
   const [products, setProducts] = useState<Product[]>(mockCatalog);
   const [loading, setLoading] = useState<boolean>(true);
@@ -108,29 +152,47 @@ function ShopContent() {
     const sort = searchParams.get('sort');
     const q = searchParams.get('search');
 
-    setSelectedCategories(cat ? cat.split(',') : []);
-    setSelectedMetal(metal || 'ALL');
-    setSelectedFinish(finish || 'ALL');
-    setPriceRange(maxPrice ? Number(maxPrice) : 5000);
-    setSortOrder(sort || 'newest');
-    setSearchTerm(q || '');
+    setFilters({
+      category: cat || null,
+      metal: metal || null,
+      finish: finish || null,
+      minPrice: 0,
+      maxPrice: maxPrice ? Number(maxPrice) : 50000,
+      sort: sort || 'newest',
+      search: q || '',
+    });
   }, [searchParams]);
+
+  const applyClientSideFilters = () => {
+    let filtered = [...mockCatalog];
+    if (filters.category) {
+      filtered = filtered.filter(p => p.category.toString() === filters.category);
+    }
+    if (filters.metal && filters.metal !== 'ALL') {
+      filtered = filtered.filter(p => p.metal.toString() === filters.metal);
+    }
+    if (filters.finish && filters.finish !== 'ALL') {
+      filtered = filtered.filter(p => p.finish.toString() === filters.finish);
+    }
+    filtered = filtered.filter(p => p.priceINR <= filters.maxPrice);
+    
+    // Sort
+    if (filters.sort === 'price_asc') {
+      filtered.sort((a, b) => a.priceINR - b.priceINR);
+    } else if (filters.sort === 'price_desc') {
+      filtered.sort((a, b) => b.priceINR - a.priceINR);
+    }
+    
+    setProducts(filtered);
+  };
 
   // Fetch products from backend with filters
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const params = new URLSearchParams();
-        if (selectedCategories.length > 0) params.set('category', selectedCategories.join(','));
-        if (selectedMetal && selectedMetal !== 'ALL') params.set('metal', selectedMetal);
-        if (selectedFinish && selectedFinish !== 'ALL') params.set('finish', selectedFinish);
-        if (priceRange < 5000) params.set('maxPrice', String(priceRange));
-        if (sortOrder) params.set('sort', sortOrder);
-        if (searchTerm) params.set('search', searchTerm);
-
-        const queryStr = params.toString() ? `?${params.toString()}` : '';
-        const res = await fetch(`/api/v1/products${queryStr}`);
+        const url = buildProductsUrl(filters, 1);
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setProducts(data.products || mockCatalog);
@@ -146,43 +208,25 @@ function ShopContent() {
     }
 
     fetchProducts();
-  }, [selectedCategories, selectedMetal, selectedFinish, priceRange, sortOrder, searchTerm]);
-
-  const applyClientSideFilters = () => {
-    let filtered = [...mockCatalog];
-    if (selectedCategories.length > 0) {
-      filtered = filtered.filter(p => selectedCategories.includes(p.category.toString()));
-    }
-    if (selectedMetal && selectedMetal !== 'ALL') {
-      filtered = filtered.filter(p => p.metal.toString() === selectedMetal);
-    }
-    if (selectedFinish && selectedFinish !== 'ALL') {
-      filtered = filtered.filter(p => p.finish.toString() === selectedFinish);
-    }
-    filtered = filtered.filter(p => p.priceINR <= priceRange);
-    
-    // Sort
-    if (sortOrder === 'price_asc') {
-      filtered.sort((a, b) => a.priceINR - b.priceINR);
-    } else if (sortOrder === 'price_desc') {
-      filtered.sort((a, b) => b.priceINR - a.priceINR);
-    }
-    
-    setProducts(filtered);
-  };
+  }, [filters]);
 
   const handleCategoryChange = (cat: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
-    );
+    setFilters(prev => ({
+      ...prev,
+      category: prev.category === cat ? null : cat
+    }));
   };
 
   const clearFilters = () => {
-    setSelectedCategories([]);
-    setSelectedMetal('ALL');
-    setSelectedFinish('ALL');
-    setPriceRange(5000);
-    setSearchTerm('');
+    setFilters({
+      category: null,
+      metal: null,
+      finish: null,
+      minPrice: 0,
+      maxPrice: 50000,
+      search: '',
+      sort: 'newest',
+    });
     router.push('/shop');
   };
 
@@ -194,7 +238,7 @@ function ShopContent() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-wide">
-              {searchTerm ? `Search Results for "${searchTerm}"` : 'All Collections'}
+              {filters.search ? `Search Results for "${filters.search}"` : 'All Collections'}
             </h1>
             <p className="text-2xs text-text-muted mt-1 uppercase tracking-wider font-semibold">
               Showing {products.length} elegant {products.length === 1 ? 'piece' : 'pieces'}
@@ -214,8 +258,8 @@ function ShopContent() {
             </button>
 
             <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
+              value={filters.sort}
+              onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
               className="border border-border-custom bg-surface rounded-card py-2 px-3 text-xs font-medium focus:outline-none focus:border-accent text-text"
             >
               <option value="newest">Sort: Newest</option>
@@ -245,7 +289,7 @@ function ShopContent() {
                   <label key={cat} className="flex items-center gap-2 cursor-pointer hover:text-accent">
                     <input
                       type="checkbox"
-                      checked={selectedCategories.includes(cat)}
+                      checked={filters.category === cat}
                       onChange={() => handleCategoryChange(cat)}
                       className="accent-accent h-4 w-4"
                     />
@@ -259,8 +303,8 @@ function ShopContent() {
             <div className="space-y-3">
               <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Metal Type</h4>
               <select
-                value={selectedMetal}
-                onChange={(e) => setSelectedMetal(e.target.value)}
+                value={filters.metal || 'ALL'}
+                onChange={(e) => setFilters(prev => ({ ...prev, metal: e.target.value === 'ALL' ? null : e.target.value }))}
                 className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
               >
                 <option value="ALL">All Metals</option>
@@ -274,8 +318,8 @@ function ShopContent() {
             <div className="space-y-3">
               <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Finish Type</h4>
               <select
-                value={selectedFinish}
-                onChange={(e) => setSelectedFinish(e.target.value)}
+                value={filters.finish || 'ALL'}
+                onChange={(e) => setFilters(prev => ({ ...prev, finish: e.target.value === 'ALL' ? null : e.target.value }))}
                 className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
               >
                 <option value="ALL">All Finishes</option>
@@ -289,15 +333,15 @@ function ShopContent() {
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wide">
                 <h4 className="font-display">Max Price</h4>
-                <span className="font-mono text-accent">₹{priceRange}</span>
+                <span className="font-mono text-accent">₹{filters.maxPrice}</span>
               </div>
               <input
                 type="range"
                 min="0"
-                max="5000"
-                step="100"
-                value={priceRange}
-                onChange={(e) => setPriceRange(Number(e.target.value))}
+                max="50000"
+                step="500"
+                value={filters.maxPrice}
+                onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: Number(e.target.value) }))}
                 className="w-full accent-accent cursor-pointer"
               />
             </div>
@@ -352,7 +396,7 @@ function ShopContent() {
                     <label key={cat} className="flex items-center gap-2 cursor-pointer hover:text-accent">
                       <input
                         type="checkbox"
-                        checked={selectedCategories.includes(cat)}
+                        checked={filters.category === cat}
                         onChange={() => handleCategoryChange(cat)}
                         className="accent-accent h-4 w-4"
                       />
@@ -366,8 +410,8 @@ function ShopContent() {
               <div className="space-y-3">
                 <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Metal Type</h4>
                 <select
-                  value={selectedMetal}
-                  onChange={(e) => setSelectedMetal(e.target.value)}
+                  value={filters.metal || 'ALL'}
+                  onChange={(e) => setFilters(prev => ({ ...prev, metal: e.target.value === 'ALL' ? null : e.target.value }))}
                   className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
                 >
                   <option value="ALL">All Metals</option>
@@ -381,8 +425,8 @@ function ShopContent() {
               <div className="space-y-3">
                 <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Finish Type</h4>
                 <select
-                  value={selectedFinish}
-                  onChange={(e) => setSelectedFinish(e.target.value)}
+                  value={filters.finish || 'ALL'}
+                  onChange={(e) => setFilters(prev => ({ ...prev, finish: e.target.value === 'ALL' ? null : e.target.value }))}
                   className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
                 >
                   <option value="ALL">All Finishes</option>
@@ -396,15 +440,15 @@ function ShopContent() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wide">
                   <h4 className="font-display">Max Price</h4>
-                  <span className="font-mono text-accent">₹{priceRange}</span>
+                  <span className="font-mono text-accent">₹{filters.maxPrice}</span>
                 </div>
                 <input
                   type="range"
                   min="0"
-                  max="5000"
-                  step="100"
-                  value={priceRange}
-                  onChange={(e) => setPriceRange(Number(e.target.value))}
+                  max="50000"
+                  step="500"
+                  value={filters.maxPrice}
+                  onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: Number(e.target.value) }))}
                   className="w-full accent-accent cursor-pointer"
                 />
               </div>

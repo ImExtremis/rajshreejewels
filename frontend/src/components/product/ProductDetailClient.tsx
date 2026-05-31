@@ -4,12 +4,16 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Product, ItemStatus } from '../../types';
 import { trackEvent } from '../../lib/analytics';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 interface ProductDetailClientProps {
   initialProduct: Product;
 }
 
 export default function ProductDetailClient({ initialProduct }: ProductDetailClientProps) {
+  const router = useRouter();
+  const { data: session } = useSession();
   const [product, setProduct] = useState<Product>(initialProduct);
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
@@ -92,19 +96,44 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
     setTimeout(() => setToastMessage(null), 5000);
   };
 
-  const handleAddToCart = () => {
-    setAddingToCart(true);
-    
-    // Track GA4 add_to_cart event
-    trackEvent('add_to_cart', {
-      item_id: product.id,
-      item_name: product.displayName,
-      value: product.priceINR,
-      currency: 'INR'
-    });
-
-    triggerToast("✨ Item added to your cart!");
-    setTimeout(() => setAddingToCart(false), 800);
+  const handleAddToCart = async () => {
+    try {
+      if (!session?.accessToken) {
+        router.push('/auth/login');
+        return;
+      }
+      
+      setAddingToCart(true);
+      
+      const res = await fetch('/api/v1/cart/add', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.accessToken}`,
+        },
+        body: JSON.stringify({ productId: product.id }),
+      });
+      
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || err.error || 'Failed to add to cart');
+      }
+      
+      // Track GA4 add_to_cart event
+      trackEvent('add_to_cart', {
+        item_id: product.id,
+        item_name: product.displayName,
+        value: product.priceINR,
+        currency: 'INR'
+      });
+      
+      triggerToast("✨ Item added to your cart!");
+    } catch (err: any) {
+      console.error('Add to cart error:', err);
+      triggerToast(err.message || 'Failed to add to cart');
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
   const handleShareWhatsApp = () => {

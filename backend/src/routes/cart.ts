@@ -7,6 +7,8 @@ import { config } from '../config';
 import { catchAsync, AppError } from '../utils/errors';
 import { JWTPayload } from '../types';
 import { ItemStatus } from '@prisma/client';
+import { auth } from '../middleware/auth';
+import { optionalAuth } from '../middleware/optionalAuth';
 
 const router = Router();
 
@@ -29,27 +31,6 @@ interface Cart {
   updatedAt: string;
   coupon?: CartCoupon | null;
 }
-
-// Helper: Resolves Redis key from token or guest sessionId header
-const resolveCartKey = (req: Request, required = true): string | null => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const token = authHeader.split(' ')[1];
-      const payload = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
-      return `cart:${payload.userId}`;
-    } catch (_) {}
-  }
-
-  const sessionId = req.headers['x-session-id'] as string;
-  if (!sessionId || sessionId.trim() === '') {
-    if (required) {
-      throw new AppError('Session header (x-session-id) or Authorization token is required', 400, 'SESSION_REQUIRED');
-    }
-    return null;
-  }
-  return `cart:guest:${sessionId}`;
-};
 
 // Helper: Fetches cart from Redis
 const getCart = async (key: string): Promise<Cart> => {
@@ -74,82 +55,79 @@ const saveCart = async (key: string, cart: Cart): Promise<void> => {
 };
 
 // ─── GET /cart ──────────────────────────────────────────────
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', optionalAuth, async (req: Request, res: Response) => {
   try {
-    let userId = req.user?.id;
-    if (!userId) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const token = authHeader.split(' ')[1];
-          const payload = jwt.verify(token, config.JWT_SECRET) as JWTPayload;
-          userId = payload.userId;
-        } catch (_) {}
-      }
-    }
-    const sessionId = req.headers['x-session-id'] as string;
+    const userId = (req as any).user?.id;
+    const sessionId = req.headers['x-session-id'] as string | undefined;
 
-    // If neither auth nor session — return empty cart, not 400
+    // No auth, no session — return empty cart gracefully
     if (!userId && !sessionId) {
-      return res.json({
-        items: [],
-        updatedAt: new Date().toISOString(),
-      });
-    }
-
-    const cartKey = userId ? `cart:${userId}` : `cart:guest:${sessionId}`;
-    const cartData = await redis.get(cartKey);
-
-    if (!cartData) {
       return res.json({ items: [], updatedAt: new Date().toISOString() });
     }
 
-    const cart = JSON.parse(cartData);
+    const cartKey = userId ? `cart:${userId}` : `cart:guest:${sessionId}`;
+    
+    let cart: Cart = { items: [], updatedAt: new Date().toISOString() };
+    
+    try {
+      const raw = await redis.get(cartKey);
+      if (raw) cart = JSON.parse(raw) as Cart;
+    } catch {
+      return res.json({ items: [], updatedAt: new Date().toISOString() });
+    }
 
-    // Enrich cart items with product data
-    const enrichedItems = await Promise.all(
+    if (!cart.items || cart.items.length === 0) {
+      return res.json({ items: [], updatedAt: cart.updatedAt });
+    }
+
+    // Enrich with product data
+    const enriched = await Promise.all(
       cart.items.map(async (item: any) => {
-        const product = await prisma.product.findUnique({
-          where: { id: item.productId },
-          select: {
-            id: true,
-            slug: true,
-            displayName: true,
-            shortDesc: true,
-            priceINR: true,
-            originalPriceINR: true,
-            primaryImageUrl: true,
-            status: true,
-            category: true,
-          }
-        });
-
-        if (!product) return null;
-
-        return {
-          ...item,
-          product,
-          cartError: product.status !== 'AVAILABLE' ? 'ITEM_SOLD' : null,
-        };
+        try {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: {
+              id: true,
+              slug: true,
+              displayName: true,
+              priceINR: true,
+              originalPriceINR: true,
+              primaryImageUrl: true,
+              status: true,
+              category: true,
+            }
+          });
+          if (!product) return null;
+          return {
+            productId: item.productId,
+            addedAt: item.addedAt,
+            product,
+            cartError: product.status !== 'AVAILABLE' ? 'ITEM_SOLD' : null,
+          };
+        } catch {
+          return null;
+        }
       })
     );
 
     return res.json({
-      items: enrichedItems.filter(Boolean),
+      items: enriched.filter(Boolean),
       updatedAt: cart.updatedAt,
       coupon: cart.coupon,
     });
   } catch (err) {
-    return res.status(500).json({ error: 'CART_ERROR' });
+    console.error('Cart GET error:', err);
+    return res.status(500).json({ error: 'CART_ERROR', message: 'Failed to load cart' });
   }
 });
 
 // ─── POST /cart/add ─────────────────────────────────────────
 router.post(
   '/add',
-  catchAsync(async (req: Request, res: Response) => {
+  auth,
+  catchAsync(async (req: any, res: Response) => {
     const { productId } = z.object({ productId: z.string() }).parse(req.body);
-    const key = resolveCartKey(req)!;
+    const key = `cart:${req.user.id}`;
 
     // Verify product exists and is AVAILABLE
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -184,9 +162,10 @@ router.post(
 // ─── DELETE /cart/remove/:productId ─────────────────────────
 router.delete(
   '/remove/:productId',
-  catchAsync(async (req: Request, res: Response) => {
+  auth,
+  catchAsync(async (req: any, res: Response) => {
     const { productId } = req.params;
-    const key = resolveCartKey(req)!;
+    const key = `cart:${req.user.id}`;
 
     const cart = await getCart(key);
 
@@ -207,8 +186,9 @@ router.delete(
 // ─── POST /cart/clear ───────────────────────────────────────
 router.post(
   '/clear',
-  catchAsync(async (req: Request, res: Response) => {
-    const key = resolveCartKey(req)!;
+  auth,
+  catchAsync(async (req: any, res: Response) => {
+    const key = `cart:${req.user.id}`;
 
     if (redis.isOpen) {
       await redis.del(key);
@@ -221,15 +201,10 @@ router.post(
 // ─── POST /cart/merge ───────────────────────────────────────
 router.post(
   '/merge',
-  catchAsync(async (req: Request, res: Response) => {
+  auth,
+  catchAsync(async (req: any, res: Response) => {
     const { guestSessionId } = z.object({ guestSessionId: z.string() }).parse(req.body);
-    
-    // Resolve user's cart key (must be authenticated)
-    const userKey = resolveCartKey(req);
-    if (!userKey || !userKey.startsWith('cart:')) {
-      throw new AppError('User authentication token required for merge operation', 401, 'UNAUTHORIZED');
-    }
-
+    const userKey = `cart:${req.user.id}`;
     const guestKey = `cart:guest:${guestSessionId}`;
 
     const userCart = await getCart(userKey);
@@ -262,13 +237,11 @@ router.post(
 // ─── POST /cart/apply-coupon ────────────────────────────────
 router.post(
   '/apply-coupon',
+  auth,
   catchAsync(async (req: any, res: Response) => {
     const { code } = z.object({ code: z.string() }).parse(req.body);
-    const key = resolveCartKey(req)!;
-    const userId = req.user?.id;
-    if (!userId) {
-      throw new AppError('Authentication required to apply coupon', 401, 'UNAUTHORIZED');
-    }
+    const key = `cart:${req.user.id}`;
+    const userId = req.user.id;
 
     const uppercaseCode = code.toUpperCase();
 
@@ -363,8 +336,9 @@ router.post(
 // ─── DELETE /cart/remove-coupon ─────────────────────────────
 router.delete(
   '/remove-coupon',
-  catchAsync(async (req: Request, res: Response) => {
-    const key = resolveCartKey(req)!;
+  auth,
+  catchAsync(async (req: any, res: Response) => {
+    const key = `cart:${req.user.id}`;
     const cart = await getCart(key);
     
     if (cart.coupon) {

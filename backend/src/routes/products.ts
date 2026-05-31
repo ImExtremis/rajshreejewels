@@ -8,9 +8,9 @@ const router = Router();
 
 // Zod schemas for query validation
 const listProductsSchema = z.object({
-  category: z.nativeEnum(Category).optional(),
-  metal: z.nativeEnum(Metal).optional(),
-  finish: z.nativeEnum(Finish).optional(),
+  category: z.string().optional(),
+  metal: z.string().optional(),
+  finish: z.string().optional(),
   minPrice: z.coerce.number().int().nonnegative().optional(),
   maxPrice: z.coerce.number().int().nonnegative().optional(),
   sort: z.enum(['newest', 'price_asc', 'price_desc']).default('newest'),
@@ -43,9 +43,19 @@ router.get(
       status: ItemStatus.AVAILABLE,
     };
 
-    if (category) whereClause.category = category;
-    if (metal) whereClause.metal = metal;
-    if (finish) whereClause.finish = finish;
+    const validCategories = ['NECKLACE', 'EARRINGS', 'BANGLES', 'BRACELET', 'RING', 'ANKLET', 'MAANG_TIKKA', 'NOSE_PIN', 'PENDANT', 'SET', 'OTHER'];
+    const validMetals = ['GOLD_1GRAM', 'SILVER', 'BRASS', 'COPPER', 'ALLOY', 'NONE'];
+    const validFinishes = ['GOLD_POLISH', 'SILVER_POLISH', 'ANTIQUE', 'MATTE', 'RHODIUM', 'OXIDISED', 'MEENAKARI', 'KUNDAN', 'NONE'];
+
+    if (category && validCategories.includes(category as string)) {
+      whereClause.category = category as Category;
+    }
+    if (metal && validMetals.includes(metal as string)) {
+      whereClause.metal = metal as Metal;
+    }
+    if (finish && validFinishes.includes(finish as string)) {
+      whereClause.finish = finish as Finish;
+    }
 
     // Price range filters
     if (minPrice !== undefined || maxPrice !== undefined) {
