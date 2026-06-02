@@ -3,6 +3,11 @@ const nextConfig = {
   images: {
     // Cache optimised Next.js images for 24 hours locally in the browser
     minimumCacheTTL: 86400,
+    localPatterns: [
+      {
+        pathname: '/images/**',
+      },
+    ],
     remotePatterns: [
       {
         protocol: 'https',
@@ -12,6 +17,10 @@ const nextConfig = {
         protocol: 'http',
         hostname: 'localhost',
         port: '4000',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
       },
       {
         protocol: 'https',

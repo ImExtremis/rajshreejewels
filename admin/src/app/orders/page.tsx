@@ -1041,8 +1041,7 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => handleBookCourier(selectedCourierOverride?.courier_company_id)}
                 disabled={bookingLoading || !selectedCourierOverride}
-                className="btn btn-primary"
-                style={{ backgroundColor: '#C9A84C', color: '#111', fontWeight: 'bold' }}
+                className="btn btn-gold"
               >
                 {bookingLoading ? 'Booking Shipment...' : `Confirm & Book (${selectedCourierOverride?.courier_name})`}
               </button>

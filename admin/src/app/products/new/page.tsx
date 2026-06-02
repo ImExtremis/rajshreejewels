@@ -63,7 +63,7 @@ export default function NewListingPage() {
     if (!aiEnhancedProduct) {
       setPreviewName(name || 'Exquisite Jewellery Piece');
       setPreviewShortDesc(`Beautiful ${category.toLowerCase().replace('_', ' ')} finished in ${finish.toLowerCase().replace('_', ' ')}.`);
-      setPreviewDescription('Real-time preview will be populated with a spectacular, handcrafted SEO product description after you click "Enhance with AI".');
+      setPreviewDescription('');
       setPreviewMetaTitle(`${name || 'Jewellery'} | Rajshree Jewels`);
       setPreviewMetaDescription(`Shop premium handcrafted ${category.toLowerCase().replace('_', ' ')} at Rajshree Jewels.`);
       setPreviewKeywords([category, metal, finish].filter(Boolean));
@@ -183,6 +183,25 @@ export default function NewListingPage() {
       if (!createRes.ok) throw new Error('Failed to create draft record in database');
       const product = await createRes.json();
 
+      // 1b. Save draft descriptions and SEO details typed by user
+      const updateRes = await fetch(`${BACKEND_URL}/admin/products/${product.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayName: previewName,
+          shortDesc: previewShortDesc,
+          description: previewDescription,
+          metaTitle: previewMetaTitle || `${previewName} | Rajshree Jewels`,
+          metaDescription: previewMetaDescription || previewShortDesc,
+          keywords: previewKeywords,
+        })
+      });
+
+      if (!updateRes.ok) throw new Error('Basic info created, but failed to save draft copy details.');
+
       // 2. Upload images separately if any
       if (images.length > 0) {
         const formData = new FormData();
@@ -208,6 +227,103 @@ export default function NewListingPage() {
 
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to save draft.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Publish listing directly without AI enhancement
+  const handlePublishDirectly = async () => {
+    if (!name || !priceINR || images.length === 0) {
+      setErrorMsg('Please enter name, price, and upload at least 1 image to publish directly.');
+      return;
+    }
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const token = localStorage.getItem('admin_token');
+
+      // 1. Create product record in DB as UNLISTED first
+      const createRes = await fetch(`${BACKEND_URL}/admin/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name,
+          category,
+          metal,
+          finish,
+          weightGrams: weightGrams ? parseFloat(weightGrams) : null,
+          stoneType: stoneType || null,
+          occasion: occasion || null,
+          priceINR: parseInt(priceINR, 10),
+          originalPriceINR: originalPriceINR ? parseInt(originalPriceINR, 10) : null,
+          status: 'UNLISTED'
+        })
+      });
+
+      if (!createRes.ok) throw new Error('Failed to create product record in database');
+      const product = await createRes.json();
+
+      // 2. Save text details and SEO preview values typed by admin
+      const updateRes = await fetch(`${BACKEND_URL}/admin/products/${product.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayName: previewName,
+          shortDesc: previewShortDesc,
+          description: previewDescription,
+          metaTitle: previewMetaTitle || `${previewName} | Rajshree Jewels`,
+          metaDescription: previewMetaDescription || previewShortDesc,
+          keywords: previewKeywords,
+        })
+      });
+
+      if (!updateRes.ok) throw new Error('Product created, but copywriting details could not be saved.');
+
+      // 3. Upload images and run optimized resizing
+      const formData = new FormData();
+      images.forEach(img => {
+        formData.append('images', img.file);
+      });
+
+      const uploadRes = await fetch(`${BACKEND_URL}/admin/products/${product.id}/images`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!uploadRes.ok) throw new Error('Details saved, but image optimization upload failed.');
+
+      // 4. Publish listing (sets status to AVAILABLE and runs ISR revalidation)
+      const pubRes = await fetch(`${BACKEND_URL}/listing/publish/${product.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          displayName: previewName,
+          description: previewDescription
+        })
+      });
+
+      if (!pubRes.ok) throw new Error('Product saved and images uploaded, but failed to set status to live.');
+
+      setSuccessMsg('✨ Exquisite jewellery piece published successfully!');
+      setTimeout(() => {
+        router.push('/products');
+      }, 1500);
+
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to publish directly.');
     } finally {
       setLoading(false);
     }
@@ -625,48 +741,49 @@ export default function NewListingPage() {
             <h3 style={{ fontSize: '13px', textTransform: 'uppercase', color: '#C9A84C', borderBottom: '1px solid #222', paddingBottom: '6px', marginBottom: '16px', letterSpacing: '0.5px' }}>
               Section 4 — AI Optimization
             </h3>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={handleEnhanceAI}
-                disabled={isEnhancing || images.length === 0}
-                className="btn btn-primary"
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: '#C9A84C',
-                  color: '#111',
-                  fontWeight: '700',
-                  boxShadow: '0 4px 15px rgba(201, 168, 76, 0.2)'
-                }}
-              >
-                {isEnhancing ? 'Enhancing...' : '✨ Enhance with AI'}
-              </button>
-              
-              {isEnhancing && (
-                <div style={{ flexGrow: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', textTransform: 'uppercase', color: '#888', marginBottom: '4px' }}>
-                    <span>Progress Tracker</span>
-                    <span style={{ color: '#C9A84C', fontWeight: 'bold' }}>
-                      {enhanceProgress === 'uploading' && 'Uploading assets...'}
-                      {enhanceProgress === 'writing' && 'AI is writing copy...'}
-                      {enhanceProgress === 'processing' && 'Sharp processing assets...'}
-                    </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleEnhanceAI}
+                  disabled={isEnhancing || images.length === 0}
+                  className="btn btn-gold"
+                  style={{
+                    padding: '12px 24px'
+                  }}
+                >
+                  {isEnhancing ? 'Enhancing...' : '✨ Enhance with AI'}
+                </button>
+                
+                {isEnhancing && (
+                  <div style={{ flexGrow: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', textTransform: 'uppercase', color: '#888', marginBottom: '4px' }}>
+                      <span>Progress Tracker</span>
+                      <span style={{ color: '#C9A84C', fontWeight: 'bold' }}>
+                        {enhanceProgress === 'uploading' && 'Uploading assets...'}
+                        {enhanceProgress === 'writing' && 'AI is writing copy...'}
+                        {enhanceProgress === 'processing' && 'Sharp processing assets...'}
+                      </span>
+                    </div>
+                    <div style={{ height: '4px', background: '#222', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          background: '#C9A84C',
+                          width:
+                            enhanceProgress === 'uploading' ? '25%' :
+                            enhanceProgress === 'writing' ? '60%' :
+                            enhanceProgress === 'processing' ? '85%' : '100%',
+                          transition: 'width 0.4s ease'
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div style={{ height: '4px', background: '#222', borderRadius: '2px', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        height: '100%',
-                        background: '#C9A84C',
-                        width:
-                          enhanceProgress === 'uploading' ? '25%' :
-                          enhanceProgress === 'writing' ? '60%' :
-                          enhanceProgress === 'processing' ? '85%' : '100%',
-                        transition: 'width 0.4s ease'
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
+              <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                * Optional: AI enhancement creates premium luxury copy and optimized product crops automatically. You may skip this and type your own details, then click &quot;Publish Without AI&quot; directly.
+              </div>
             </div>
           </div>
 
@@ -759,7 +876,6 @@ export default function NewListingPage() {
                   onChange={(e) => setPreviewDescription(e.target.value)}
                   className="form-control"
                   style={{ background: '#0a0a0a', border: '1px solid #333', minHeight: '120px', fontSize: '12px', lineHeight: '1.6' }}
-                  disabled={!aiEnhancedProduct}
                 />
               </div>
 
@@ -825,21 +941,7 @@ export default function NewListingPage() {
       </div>
 
       {/* Sticky Action Bar */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: '240px',
-          right: 0,
-          background: '#111',
-          borderTop: '1px solid #222',
-          padding: '16px 40px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          zIndex: 500
-        }}
-      >
+      <div className="sticky-footer-bar">
         <button
           type="button"
           onClick={handleSaveDraft}
@@ -853,10 +955,20 @@ export default function NewListingPage() {
         <div style={{ display: 'flex', gap: '15px' }}>
           <button
             type="button"
+            onClick={handlePublishDirectly}
+            disabled={loading || isEnhancing || images.length === 0}
+            className="btn btn-publish-direct"
+            style={{ padding: '12px 24px' }}
+          >
+            Publish Without AI
+          </button>
+          
+          <button
+            type="button"
             onClick={handleEnhanceAI}
             disabled={isEnhancing || images.length === 0}
-            className="btn btn-secondary"
-            style={{ padding: '12px 24px', borderColor: '#C9A84C', color: '#C9A84C' }}
+            className="btn btn-gold"
+            style={{ padding: '12px 24px' }}
           >
             {isEnhancing ? 'Enhancing with AI...' : 'Enhance & Preview'}
           </button>
@@ -865,8 +977,8 @@ export default function NewListingPage() {
             type="button"
             onClick={handlePublishNow}
             disabled={loading || !aiProductCreatedId || !aiEnhancedProduct}
-            className="btn btn-primary"
-            style={{ padding: '12px 28px', backgroundColor: '#C9A84C', color: '#111', fontWeight: 'bold' }}
+            className="btn btn-gold"
+            style={{ padding: '12px 28px' }}
           >
             {loading ? 'Publishing...' : 'Publish Now'}
           </button>

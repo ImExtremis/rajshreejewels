@@ -272,7 +272,7 @@ export default function ProductsPage() {
           <h2 className="page-title">Store Inventory</h2>
           <div style={{ fontSize: '12px', color: '#666' }}>{total} Items Registered</div>
         </div>
-        <button onClick={() => router.push('/products/new')} className="btn btn-primary" style={{ backgroundColor: '#C9A84C', color: '#111', fontWeight: 'bold' }}>
+        <button onClick={() => router.push('/products/new')} className="btn btn-gold">
           ＋ New Listing
         </button>
       </div>
@@ -374,7 +374,7 @@ export default function ProductsPage() {
                       ) : (p.status === 'SOLD' || p.status === 'UNLISTED') ? (
                         <button
                           onClick={() => handleStatusChange(p.id, 'AVAILABLE')}
-                          className="btn btn-primary"
+                          className="btn btn-gold"
                           style={{ padding: '4px 8px', fontSize: '10px' }}
                         >
                           Relist
@@ -537,7 +537,7 @@ export default function ProductsPage() {
               </div>
               <div className="modal-footer">
                 <button type="button" onClick={() => setEditingProduct(null)} className="btn btn-secondary">Cancel</button>
-                <button type="submit" disabled={saveLoading} className="btn btn-primary">
+                <button type="submit" disabled={saveLoading} className="btn btn-gold">
                   {saveLoading ? 'Storing...' : 'Save Product'}
                 </button>
               </div>

@@ -401,8 +401,8 @@ export default function CollectionsAdminPage() {
             setCreateError('');
             setShowCreateModal(true);
           }}
-          className="btn btn-primary"
-          style={{ padding: '8px 16px', background: '#C9A84C', color: '#000', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px' }}
+          className="btn btn-gold"
+          style={{ padding: '8px 16px' }}
         >
           + New Collection
         </button>
@@ -551,7 +551,8 @@ export default function CollectionsAdminPage() {
                   <button
                     type="submit"
                     disabled={colSubmitting}
-                    style={{ padding: '10px 24px', background: '#C9A84C', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontFamily: 'inherit', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}
+                    className="btn btn-gold"
+                    style={{ padding: '10px 24px' }}
                   >
                     {colSubmitting ? 'UPDATING...' : 'Update Properties'}
                   </button>
@@ -653,14 +654,9 @@ export default function CollectionsAdminPage() {
                           
                           <button
                             onClick={() => handleAddProduct(p.id)}
+                            className="btn btn-gold"
                             style={{
-                              background: '#C9A84C',
-                              color: '#000',
-                              border: 'none',
                               padding: '3px 8px',
-                              borderRadius: '2px',
-                              cursor: 'pointer',
-                              fontWeight: 'bold',
                               fontSize: '10px'
                             }}
                           >
@@ -778,7 +774,8 @@ export default function CollectionsAdminPage() {
                 <button
                   type="submit"
                   disabled={colSubmitting}
-                  style={{ padding: '8px 18px', background: '#C9A84C', color: '#000', border: 'none', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', textTransform: 'uppercase' }}
+                  className="btn btn-gold"
+                  style={{ padding: '8px 18px' }}
                 >
                   {colSubmitting ? 'CREATING...' : 'Create Curation'}
                 </button>

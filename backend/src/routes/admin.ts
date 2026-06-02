@@ -874,17 +874,17 @@ router.put(
     const { id } = req.params;
     
     const updateSchema = z.object({
-      displayName: z.string().min(3).optional(),
-      description: z.string().optional(),
-      shortDesc: z.string().max(55).optional(),
-      priceINR: z.number().int().positive().optional(),
-      originalPriceINR: z.number().int().positive().nullable().optional(),
-      metaTitle: z.string().optional(),
-      metaDescription: z.string().optional(),
-      keywords: z.array(z.string()).optional(),
-      occasion: z.string().optional(),
-      status: z.enum(['AVAILABLE', 'SOLD', 'UNLISTED']).optional(),
-    });
+      displayName: z.string().min(3),
+      description: z.string(),
+      shortDesc: z.string().max(55),
+      priceINR: z.number().int().positive(),
+      originalPriceINR: z.number().int().positive().nullable(),
+      metaTitle: z.string(),
+      metaDescription: z.string(),
+      keywords: z.array(z.string()),
+      occasion: z.string(),
+      status: z.enum(['AVAILABLE', 'SOLD', 'UNLISTED']),
+    }).partial();
 
     const data = updateSchema.parse(req.body);
 

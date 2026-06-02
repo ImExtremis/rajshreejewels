@@ -218,7 +218,6 @@ export default function RootLayout({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'IBM Plex Mono, monospace', color: '#e0e0e0' }}>
             <div style={{ width: '400px', padding: '30px', background: '#111', border: '1px solid #222', borderRadius: '4px' }}>
               <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-                <img src="/logo.png" alt="Rajshree Jewels Logo" className="rounded-lg" style={{ height: '64px', width: 'auto', margin: '0 auto 15px auto', display: 'block', borderRadius: '8px' }} />
                 <h1 style={{ color: '#C9A84C', fontSize: '20px', letterSpacing: '2px', fontWeight: 'bold', margin: '0 0 5px 0' }}>RAJSHREE JEWELS</h1>
                 <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textTransform: 'uppercase', letterSpacing: '1px' }}>Admin Operations Center</p>
               </div>
@@ -265,11 +264,18 @@ export default function RootLayout({
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  style={{ width: '100%', padding: '12px', background: '#C9A84C', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontFamily: 'inherit', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '1px', cursor: 'pointer' }}
+                  className="btn btn-gold"
+                  style={{ width: '100%', padding: '12px' }}
                 >
                   {loginLoading ? 'AUTHENTICATING...' : 'ACCESS DASHBOARD'}
                 </button>
               </form>
+
+              <div style={{ textAlign: 'center', marginTop: '20px' }}>
+                <span style={{ fontSize: '9px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  Built by Haste Industries
+                </span>
+              </div>
             </div>
 
           </div>

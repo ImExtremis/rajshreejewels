@@ -84,9 +84,9 @@ const mockCatalog: Product[] = [
 ];
 
 interface ShopFilters {
-  category: string | null;
-  metal: string | null;
-  finish: string | null;
+  categories: string[];
+  metals: string[];
+  finishes: string[];
   minPrice: number;
   maxPrice: number;
   search: string;
@@ -107,15 +107,14 @@ function buildProductsUrl(filters: ShopFilters, page: number, maxPrice?: number)
   params.set('page', String(page));
   params.set('limit', '24');
   
-  // ONLY append if meaningful value
-  if (filters.category && filters.category !== '' && filters.category !== 'ALL') {
-    params.set('category', filters.category);
+  if (filters.categories && filters.categories.length > 0) {
+    params.set('category', filters.categories.join(','));
   }
-  if (filters.metal && filters.metal !== '' && filters.metal !== 'ALL') {
-    params.set('metal', filters.metal);
+  if (filters.metals && filters.metals.length > 0) {
+    params.set('metal', filters.metals.join(','));
   }
-  if (filters.finish && filters.finish !== '' && filters.finish !== 'ALL') {
-    params.set('finish', filters.finish);
+  if (filters.finishes && filters.finishes.length > 0) {
+    params.set('finish', filters.finishes.join(','));
   }
   if (filters.minPrice && filters.minPrice > 0) {
     params.set('minPrice', String(filters.minPrice));
@@ -134,17 +133,15 @@ function buildProductsUrl(filters: ShopFilters, page: number, maxPrice?: number)
   return `/api/v1/products?${params.toString()}`;
 }
 
-interface ShopContentProps {}
-
 function ShopContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   // Filter States
   const [filters, setFilters] = useState<ShopFilters>({
-    category: null,
-    metal: null,
-    finish: null,
+    categories: [],
+    metals: [],
+    finishes: [],
     minPrice: 0,
     maxPrice: 50000,
     search: '',
@@ -154,14 +151,40 @@ function ShopContent() {
   const [sliderMaxPrice, setSliderMaxPrice] = useState<number>(50000);
   const debouncedMaxPrice = useDebounce(sliderMaxPrice, 500);
 
-  // Synchronize debouncedMaxPrice back to filters
-  useEffect(() => {
-    setFilters(prev => ({ ...prev, maxPrice: debouncedMaxPrice }));
-  }, [debouncedMaxPrice]);
-
   const [products, setProducts] = useState<Product[]>(mockCatalog);
   const [loading, setLoading] = useState<boolean>(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
+
+  // Synchronize URL query changes to state
+  const updateUrl = (updated: Partial<ShopFilters>) => {
+    const nextFilters = { ...filters, ...updated };
+    const params = new URLSearchParams();
+    
+    if (nextFilters.categories && nextFilters.categories.length > 0) {
+      params.set('category', nextFilters.categories.join(','));
+    }
+    if (nextFilters.metals && nextFilters.metals.length > 0) {
+      params.set('metal', nextFilters.metals.join(','));
+    }
+    if (nextFilters.finishes && nextFilters.finishes.length > 0) {
+      params.set('finish', nextFilters.finishes.join(','));
+    }
+    if (nextFilters.minPrice && nextFilters.minPrice > 0) {
+      params.set('minPrice', String(nextFilters.minPrice));
+    }
+    if (nextFilters.maxPrice && nextFilters.maxPrice < 50000) {
+      params.set('maxPrice', String(nextFilters.maxPrice));
+    }
+    if (nextFilters.search && nextFilters.search.trim() !== '') {
+      params.set('search', nextFilters.search.trim());
+    }
+    if (nextFilters.sort && nextFilters.sort !== 'newest') {
+      params.set('sort', nextFilters.sort);
+    }
+    
+    const queryStr = params.toString();
+    router.replace(`/shop${queryStr ? `?${queryStr}` : ''}`, { scroll: false });
+  };
 
   // Initialize states from URL query parameters
   useEffect(() => {
@@ -173,10 +196,14 @@ function ShopContent() {
     const q = searchParams.get('search');
 
     const parsedMaxPrice = maxPrice ? Number(maxPrice) : 50000;
+    const parsedCategories = cat ? cat.split(',').filter(Boolean) : [];
+    const parsedMetals = metal ? metal.split(',').filter(Boolean) : [];
+    const parsedFinishes = finish ? finish.split(',').filter(Boolean) : [];
+
     setFilters({
-      category: cat || null,
-      metal: metal || null,
-      finish: finish || null,
+      categories: parsedCategories,
+      metals: parsedMetals,
+      finishes: parsedFinishes,
       minPrice: 0,
       maxPrice: parsedMaxPrice,
       sort: sort || 'newest',
@@ -185,16 +212,23 @@ function ShopContent() {
     setSliderMaxPrice(parsedMaxPrice);
   }, [searchParams]);
 
+  // Synchronize debouncedMaxPrice back to URL search parameters
+  useEffect(() => {
+    if (debouncedMaxPrice !== filters.maxPrice) {
+      updateUrl({ maxPrice: debouncedMaxPrice });
+    }
+  }, [debouncedMaxPrice]);
+
   const applyClientSideFilters = (maxPrice: number) => {
     let filtered = [...mockCatalog];
-    if (filters.category) {
-      filtered = filtered.filter(p => p.category.toString() === filters.category);
+    if (filters.categories && filters.categories.length > 0) {
+      filtered = filtered.filter(p => filters.categories.includes(p.category.toString()));
     }
-    if (filters.metal && filters.metal !== 'ALL') {
-      filtered = filtered.filter(p => p.metal.toString() === filters.metal);
+    if (filters.metals && filters.metals.length > 0) {
+      filtered = filtered.filter(p => filters.metals.includes(p.metal.toString()));
     }
-    if (filters.finish && filters.finish !== 'ALL') {
-      filtered = filtered.filter(p => p.finish.toString() === filters.finish);
+    if (filters.finishes && filters.finishes.length > 0) {
+      filtered = filtered.filter(p => filters.finishes.includes(p.finish.toString()));
     }
     filtered = filtered.filter(p => p.priceINR <= maxPrice);
     
@@ -230,20 +264,41 @@ function ShopContent() {
     }
 
     fetchProducts();
-  }, [debouncedMaxPrice, filters.category, filters.metal, filters.finish, filters.sort, filters.search]);
+  }, [
+    debouncedMaxPrice,
+    filters.categories.join(','),
+    filters.metals.join(','),
+    filters.finishes.join(','),
+    filters.sort,
+    filters.search
+  ]);
 
   const handleCategoryChange = (cat: string) => {
-    setFilters(prev => ({
-      ...prev,
-      category: prev.category === cat ? null : cat
-    }));
+    const nextCategories = filters.categories.includes(cat)
+      ? filters.categories.filter(c => c !== cat)
+      : [...filters.categories, cat];
+    updateUrl({ categories: nextCategories });
+  };
+
+  const handleMetalChange = (met: string) => {
+    const nextMetals = filters.metals.includes(met)
+      ? filters.metals.filter(m => m !== met)
+      : [...filters.metals, met];
+    updateUrl({ metals: nextMetals });
+  };
+
+  const handleFinishChange = (fin: string) => {
+    const nextFinishes = filters.finishes.includes(fin)
+      ? filters.finishes.filter(f => f !== fin)
+      : [...filters.finishes, fin];
+    updateUrl({ finishes: nextFinishes });
   };
 
   const clearFilters = () => {
     setFilters({
-      category: null,
-      metal: null,
-      finish: null,
+      categories: [],
+      metals: [],
+      finishes: [],
       minPrice: 0,
       maxPrice: 50000,
       search: '',
@@ -282,7 +337,7 @@ function ShopContent() {
 
             <select
               value={filters.sort}
-              onChange={(e) => setFilters(prev => ({ ...prev, sort: e.target.value }))}
+              onChange={(e) => updateUrl({ sort: e.target.value })}
               className="border border-border-custom bg-surface rounded-card py-2 px-3 text-xs font-medium focus:outline-none focus:border-accent text-text"
             >
               <option value="newest">Sort: Newest</option>
@@ -312,7 +367,7 @@ function ShopContent() {
                   <label key={cat} className="flex items-center gap-2 cursor-pointer hover:text-accent">
                     <input
                       type="checkbox"
-                      checked={filters.category === cat}
+                      checked={filters.categories.includes(cat)}
                       onChange={() => handleCategoryChange(cat)}
                       className="accent-accent h-4 w-4"
                     />
@@ -325,31 +380,37 @@ function ShopContent() {
             {/* Metal Filter */}
             <div className="space-y-3">
               <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Metal Type</h4>
-              <select
-                value={filters.metal || 'ALL'}
-                onChange={(e) => setFilters(prev => ({ ...prev, metal: e.target.value === 'ALL' ? null : e.target.value }))}
-                className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
-              >
-                <option value="ALL">All Metals</option>
+              <div className="space-y-2 text-xs text-text-muted">
                 {Object.keys(Metal).map((m) => (
-                  <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                  <label key={m} className="flex items-center gap-2 cursor-pointer hover:text-accent">
+                    <input
+                      type="checkbox"
+                      checked={filters.metals.includes(m)}
+                      onChange={() => handleMetalChange(m)}
+                      className="accent-accent h-4 w-4"
+                    />
+                    <span>{m.replace('_', ' ')}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
 
             {/* Finish Filter */}
             <div className="space-y-3">
               <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Finish Type</h4>
-              <select
-                value={filters.finish || 'ALL'}
-                onChange={(e) => setFilters(prev => ({ ...prev, finish: e.target.value === 'ALL' ? null : e.target.value }))}
-                className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
-              >
-                <option value="ALL">All Finishes</option>
+              <div className="space-y-2 text-xs text-text-muted">
                 {Object.keys(Finish).map((f) => (
-                  <option key={f} value={f}>{f.replace('_', ' ')}</option>
+                  <label key={f} className="flex items-center gap-2 cursor-pointer hover:text-accent">
+                    <input
+                      type="checkbox"
+                      checked={filters.finishes.includes(f)}
+                      onChange={() => handleFinishChange(f)}
+                      className="accent-accent h-4 w-4"
+                    />
+                    <span>{f.replace('_', ' ')}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
 
             {/* Price Slider */}
@@ -419,7 +480,7 @@ function ShopContent() {
                     <label key={cat} className="flex items-center gap-2 cursor-pointer hover:text-accent">
                       <input
                         type="checkbox"
-                        checked={filters.category === cat}
+                        checked={filters.categories.includes(cat)}
                         onChange={() => handleCategoryChange(cat)}
                         className="accent-accent h-4 w-4"
                       />
@@ -432,31 +493,37 @@ function ShopContent() {
               {/* Metal */}
               <div className="space-y-3">
                 <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Metal Type</h4>
-                <select
-                  value={filters.metal || 'ALL'}
-                  onChange={(e) => setFilters(prev => ({ ...prev, metal: e.target.value === 'ALL' ? null : e.target.value }))}
-                  className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
-                >
-                  <option value="ALL">All Metals</option>
+                <div className="space-y-2 text-xs text-text-muted">
                   {Object.keys(Metal).map((m) => (
-                    <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                    <label key={m} className="flex items-center gap-2 cursor-pointer hover:text-accent">
+                      <input
+                        type="checkbox"
+                        checked={filters.metals.includes(m)}
+                        onChange={() => handleMetalChange(m)}
+                        className="accent-accent h-4 w-4"
+                      />
+                      <span>{m.replace('_', ' ')}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               {/* Finish */}
               <div className="space-y-3">
                 <h4 className="font-display font-semibold text-sm uppercase tracking-wide">Finish Type</h4>
-                <select
-                  value={filters.finish || 'ALL'}
-                  onChange={(e) => setFilters(prev => ({ ...prev, finish: e.target.value === 'ALL' ? null : e.target.value }))}
-                  className="w-full border border-border-custom bg-surface rounded-card p-2 text-xs focus:outline-none focus:border-accent"
-                >
-                  <option value="ALL">All Finishes</option>
+                <div className="space-y-2 text-xs text-text-muted">
                   {Object.keys(Finish).map((f) => (
-                    <option key={f} value={f}>{f.replace('_', ' ')}</option>
+                    <label key={f} className="flex items-center gap-2 cursor-pointer hover:text-accent">
+                      <input
+                        type="checkbox"
+                        checked={filters.finishes.includes(f)}
+                        onChange={() => handleFinishChange(f)}
+                        className="accent-accent h-4 w-4"
+                      />
+                      <span>{f.replace('_', ' ')}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               {/* Price */}

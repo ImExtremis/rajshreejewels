@@ -50,6 +50,7 @@ export default function EditProductPage() {
   const [initLoading, setInitLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [initialProduct, setInitialProduct] = useState<Product | null>(null);
 
   // Form fields state
   const [name, setName] = useState('');
@@ -98,6 +99,7 @@ export default function EditProductPage() {
 
       if (!res.ok) throw new Error('Product not found or access denied');
       const data: Product = await res.json();
+      setInitialProduct(data);
 
       // Populate input states
       setName(data.name || '');
@@ -418,42 +420,87 @@ export default function EditProductPage() {
     try {
       const token = localStorage.getItem('admin_token');
 
-      // 1. Submit PUT update for text details and SEO previews
-      const updatePayload = {
-        displayName: previewName,
-        shortDesc: previewShortDesc,
-        description: previewDescription,
-        priceINR: parseInt(priceINR, 10),
-        originalPriceINR: originalPriceINR ? parseInt(originalPriceINR, 10) : null,
-        occasion: occasion || null,
-        metaTitle: previewMetaTitle || `${previewName} | Rajshree Jewels`,
-        metaDescription: previewMetaDescription || previewShortDesc,
-        keywords: previewKeywordsStr ? previewKeywordsStr.split(',').map(s => s.trim()).filter(Boolean) : [],
-        status: status,
-      };
+      // 1. Submit PUT update for text details and SEO previews (only if dirty/changed)
+      const updatePayload: any = {};
+      if (initialProduct) {
+        if (previewName !== (initialProduct.displayName || initialProduct.name || '')) {
+          updatePayload.displayName = previewName;
+        }
+        if (previewShortDesc !== (initialProduct.shortDesc || '')) {
+          updatePayload.shortDesc = previewShortDesc;
+        }
+        if (previewDescription !== (initialProduct.description || '')) {
+          updatePayload.description = previewDescription;
+        }
+        const parsedPrice = parseInt(priceINR, 10);
+        if (parsedPrice !== initialProduct.priceINR) {
+          updatePayload.priceINR = parsedPrice;
+        }
+        const parsedOrigPrice = originalPriceINR ? parseInt(originalPriceINR, 10) : null;
+        if (parsedOrigPrice !== initialProduct.originalPriceINR) {
+          updatePayload.originalPriceINR = parsedOrigPrice;
+        }
+        const finalOccasion = occasion || '';
+        const initialOccasion = initialProduct.occasion || '';
+        if (finalOccasion !== initialOccasion) {
+          updatePayload.occasion = finalOccasion || null;
+        }
+        const defaultMetaTitle = `${previewName} | Rajshree Jewels`;
+        const currentMetaTitle = previewMetaTitle || defaultMetaTitle;
+        if (currentMetaTitle !== (initialProduct.metaTitle || '')) {
+          updatePayload.metaTitle = currentMetaTitle;
+        }
+        const currentMetaDesc = previewMetaDescription || previewShortDesc;
+        if (currentMetaDesc !== (initialProduct.metaDescription || '')) {
+          updatePayload.metaDescription = currentMetaDesc;
+        }
+        const currentKeywords = previewKeywordsStr ? previewKeywordsStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const initialKeywords = initialProduct.keywords || [];
+        if (JSON.stringify(currentKeywords) !== JSON.stringify(initialKeywords)) {
+          updatePayload.keywords = currentKeywords;
+        }
+        if (status !== initialProduct.status) {
+          updatePayload.status = status;
+        }
+      } else {
+        updatePayload.displayName = previewName;
+        updatePayload.shortDesc = previewShortDesc;
+        updatePayload.description = previewDescription;
+        updatePayload.priceINR = parseInt(priceINR, 10);
+        updatePayload.originalPriceINR = originalPriceINR ? parseInt(originalPriceINR, 10) : null;
+        updatePayload.occasion = occasion || null;
+        updatePayload.metaTitle = previewMetaTitle || `${previewName} | Rajshree Jewels`;
+        updatePayload.metaDescription = previewMetaDescription || previewShortDesc;
+        updatePayload.keywords = previewKeywordsStr ? previewKeywordsStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+        updatePayload.status = status;
+      }
 
-      const res = await fetch(`${BACKEND_URL}/admin/products/${productId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatePayload)
-      });
+      if (Object.keys(updatePayload).length > 0) {
+        const res = await fetch(`${BACKEND_URL}/admin/products/${productId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(updatePayload)
+        });
 
-      if (!res.ok) throw new Error('Failed to update product details in database');
+        if (!res.ok) throw new Error('Failed to update product details in database');
+      }
 
       // 2. If status was changed, explicitly apply it (for relisting safety / notification triggers)
-      const statusRes = await fetch(`${BACKEND_URL}/admin/products/${productId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status })
-      });
+      if (!initialProduct || status !== initialProduct.status) {
+        const statusRes = await fetch(`${BACKEND_URL}/admin/products/${productId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ status })
+        });
 
-      if (!statusRes.ok) throw new Error('Failed to update product inventory status');
+        if (!statusRes.ok) throw new Error('Failed to update product inventory status');
+      }
 
       setSuccessMsg('✨ Exquisite jewellery piece updated successfully!');
       setTimeout(() => {
@@ -737,13 +784,9 @@ export default function EditProductPage() {
                 type="button"
                 onClick={handleEnhanceAI}
                 disabled={isEnhancing || images.length === 0}
-                className="btn btn-primary"
+                className="btn btn-gold"
                 style={{
-                  padding: '12px 24px',
-                  backgroundColor: '#C9A84C',
-                  color: '#111',
-                  fontWeight: '700',
-                  boxShadow: '0 4px 15px rgba(201, 168, 76, 0.2)'
+                  padding: '12px 24px'
                 }}
               >
                 {isEnhancing ? 'Enhancing...' : '✨ Re-enhance Copy with AI'}
@@ -966,13 +1009,9 @@ export default function EditProductPage() {
           <button
             type="button"
             onClick={handleSaveProduct}
-            className="btn btn-primary"
+            className="btn btn-gold"
             style={{
-              padding: '10px 30px',
-              backgroundColor: '#C9A84C',
-              color: '#111',
-              fontWeight: '700',
-              boxShadow: '0 4px 15px rgba(201, 168, 76, 0.2)'
+              padding: '10px 30px'
             }}
           >
             Save Listing

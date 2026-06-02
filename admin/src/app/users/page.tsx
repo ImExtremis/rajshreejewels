@@ -268,7 +268,8 @@ export default function UsersPage() {
         </div>
         <button
           onClick={() => setInviteModalOpen(true)}
-          style={{ background: '#C9A84C', color: '#000', border: 'none', padding: '12px 24px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px', letterSpacing: '0.5px', textTransform: 'uppercase' }}
+          className="btn btn-gold"
+          style={{ padding: '12px 24px' }}
         >
           Invite Team Member
         </button>
@@ -432,7 +433,8 @@ export default function UsersPage() {
                 <button
                   type="submit"
                   disabled={inviting}
-                  style={{ background: '#C9A84C', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                  className="btn btn-gold"
+                  style={{ padding: '10px 24px' }}
                 >
                   {inviting ? 'SENDING INVITE...' : 'SEND INVITATION'}
                 </button>
@@ -598,7 +600,8 @@ export default function UsersPage() {
             <button
               onClick={handleSaveUser}
               disabled={savingUser}
-              style={{ background: '#C9A84C', color: '#000', border: 'none', padding: '10px 24px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+              className="btn btn-gold"
+              style={{ padding: '10px 24px' }}
             >
               {savingUser ? 'SAVING CHANGES...' : 'SAVE RIGHTS'}
             </button>

@@ -47,14 +47,23 @@ router.get(
     const validMetals = ['GOLD_1GRAM', 'SILVER', 'BRASS', 'COPPER', 'ALLOY', 'NONE'];
     const validFinishes = ['GOLD_POLISH', 'SILVER_POLISH', 'ANTIQUE', 'MATTE', 'RHODIUM', 'OXIDISED', 'MEENAKARI', 'KUNDAN', 'NONE'];
 
-    if (category && validCategories.includes(category as string)) {
-      whereClause.category = category as Category;
+    if (category) {
+      const categories = category.split(',').filter(c => validCategories.includes(c));
+      if (categories.length > 0) {
+        whereClause.category = { in: categories as Category[] };
+      }
     }
-    if (metal && validMetals.includes(metal as string)) {
-      whereClause.metal = metal as Metal;
+    if (metal) {
+      const metals = metal.split(',').filter(m => validMetals.includes(m));
+      if (metals.length > 0) {
+        whereClause.metal = { in: metals as Metal[] };
+      }
     }
-    if (finish && validFinishes.includes(finish as string)) {
-      whereClause.finish = finish as Finish;
+    if (finish) {
+      const finishes = finish.split(',').filter(f => validFinishes.includes(f));
+      if (finishes.length > 0) {
+        whereClause.finish = { in: finishes as Finish[] };
+      }
     }
 
     // Price range filters
