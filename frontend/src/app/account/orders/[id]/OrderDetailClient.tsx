@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 
 interface ProductImage {
   urlThumb: string;
@@ -60,6 +61,8 @@ interface OrderDetailClientProps {
 }
 
 export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailClientProps) {
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +90,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
       setLoading(true);
       setError(null);
       const res = await fetch(`/api/v1/orders/${orderId}`, {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
+        headers: { Authorization: `Bearer ${session?.accessToken}` }
       });
       if (!res.ok) throw new Error('Order details could not be found.');
       const data = await res.json();
@@ -102,7 +105,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
   const fetchMessages = async () => {
     try {
       const res = await fetch(`/api/v1/messages/order/${orderId}`, {
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
+        headers: { Authorization: `Bearer ${session?.accessToken}` }
       });
       if (res.ok) {
         const data = await res.json();
@@ -115,7 +118,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
     try {
       await fetch(`/api/v1/messages/order/${orderId}/read`, {
         method: 'PUT',
-        headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
+        headers: { Authorization: `Bearer ${session?.accessToken}` }
       });
     } catch (err) {}
   };
@@ -131,7 +134,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${sessionUser.accessToken}`
+          Authorization: `Bearer ${session?.accessToken}`
         },
         body: JSON.stringify({ body: newMessage.trim() })
       });
@@ -149,6 +152,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
   };
 
   useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken) return;
     fetchOrder();
     fetchMessages();
     
@@ -158,7 +162,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [orderId]);
+  }, [status, session?.accessToken, orderId]);
 
   useEffect(() => {
     if (messages.some(m => m.fromType === 'ADMIN' && !m.readAt)) {
@@ -174,7 +178,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
       let attempts = 0;
       while (attempts < 10) {
         const res = await fetch(`/api/v1/orders/${orderId}/invoice`, {
-          headers: { Authorization: `Bearer ${sessionUser.accessToken}` }
+          headers: { Authorization: `Bearer ${session?.accessToken}` }
         });
         if (res.status === 200) {
           const blob = await res.blob();
@@ -228,7 +232,7 @@ export default function OrderDetailClient({ orderId, sessionUser }: OrderDetailC
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${sessionUser.accessToken}`
+                Authorization: `Bearer ${session?.accessToken}`
               },
               body: JSON.stringify({
                 orderId: order.id,

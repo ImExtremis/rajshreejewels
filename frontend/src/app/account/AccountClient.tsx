@@ -54,8 +54,8 @@ type ProfileFields = z.infer<typeof profileSchema>;
 type AddressFields = z.infer<typeof addressSchema>;
 
 export default function AccountClient({ sessionUser }: AccountClientProps) {
-  const { data: session } = useSession();
-  const token = (session as any)?.accessToken || sessionUser.accessToken;
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
   const [activeTab, setActiveTab] = useState<'profile' | 'addresses' | 'orders' | 'wishlist' | 'payment-methods'>('profile');
   const [user, setUser] = useState(sessionUser);
   const [freshUser, setFreshUser] = useState<any | null>(null);
@@ -247,18 +247,20 @@ export default function AccountClient({ sessionUser }: AccountClientProps) {
 
   // Fetch address and wishlist details on mount
   useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken) return;
     fetchFreshUser();
     fetchAddresses();
     fetchWishlist();
-  }, []);
+  }, [status, session?.accessToken]);
 
   useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken) return;
     if (activeTab === 'orders') {
       fetchOrders();
     } else if (activeTab === 'payment-methods') {
       fetchPaymentMethods();
     }
-  }, [activeTab]);
+  }, [status, session?.accessToken, activeTab]);
 
   const fetchOrders = async () => {
     setOrdersLoading(true);

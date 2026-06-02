@@ -68,8 +68,8 @@ type CheckoutStep = 'address' | 'review' | 'payment';
 export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session } = useSession();
-  const token = (session as any)?.accessToken || sessionUser.accessToken;
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
   const targetProductId = searchParams.get('productId');
 
   // Steps state
@@ -186,6 +186,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
 
   // Fetch initial checkout data (settings, addresses, product)
   useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken) return;
     async function fetchData() {
       try {
         setLoading(true);
@@ -247,7 +248,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
     }
 
     fetchData();
-  }, [targetProductId, sessionUser.accessToken]);
+  }, [status, session?.accessToken, targetProductId]);
 
   // Reservation countdown timer effect
   useEffect(() => {

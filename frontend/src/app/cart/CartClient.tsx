@@ -43,8 +43,8 @@ interface CartClientProps {
 
 export default function CartClient({ sessionUser }: CartClientProps) {
   const router = useRouter();
-  const { data: session } = useSession();
-  const token = (session as any)?.accessToken || sessionUser.accessToken;
+  const { data: session, status } = useSession();
+  const token = session?.accessToken;
   
   const [items, setItems] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
@@ -85,8 +85,9 @@ export default function CartClient({ sessionUser }: CartClientProps) {
   };
 
   useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken) return;
     fetchCart();
-  }, [sessionUser.accessToken]);
+  }, [status, session?.accessToken]);
 
   const handleRemove = async (productId: string) => {
     try {

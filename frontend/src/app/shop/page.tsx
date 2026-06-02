@@ -93,7 +93,16 @@ interface ShopFilters {
   sort: string;
 }
 
-function buildProductsUrl(filters: ShopFilters, page: number): string {
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+function buildProductsUrl(filters: ShopFilters, page: number, maxPrice?: number): string {
   const params = new URLSearchParams();
   params.set('page', String(page));
   params.set('limit', '24');
@@ -111,8 +120,9 @@ function buildProductsUrl(filters: ShopFilters, page: number): string {
   if (filters.minPrice && filters.minPrice > 0) {
     params.set('minPrice', String(filters.minPrice));
   }
-  if (filters.maxPrice && filters.maxPrice < 50000) {
-    params.set('maxPrice', String(filters.maxPrice));
+  const actualMaxPrice = maxPrice !== undefined ? maxPrice : filters.maxPrice;
+  if (actualMaxPrice && actualMaxPrice < 50000) {
+    params.set('maxPrice', String(actualMaxPrice));
   }
   if (filters.search && filters.search.trim() !== '') {
     params.set('search', filters.search.trim());
@@ -123,6 +133,8 @@ function buildProductsUrl(filters: ShopFilters, page: number): string {
   
   return `/api/v1/products?${params.toString()}`;
 }
+
+interface ShopContentProps {}
 
 function ShopContent() {
   const searchParams = useSearchParams();
@@ -139,6 +151,14 @@ function ShopContent() {
     sort: 'newest',
   });
 
+  const [sliderMaxPrice, setSliderMaxPrice] = useState<number>(50000);
+  const debouncedMaxPrice = useDebounce(sliderMaxPrice, 500);
+
+  // Synchronize debouncedMaxPrice back to filters
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, maxPrice: debouncedMaxPrice }));
+  }, [debouncedMaxPrice]);
+
   const [products, setProducts] = useState<Product[]>(mockCatalog);
   const [loading, setLoading] = useState<boolean>(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
@@ -152,18 +172,20 @@ function ShopContent() {
     const sort = searchParams.get('sort');
     const q = searchParams.get('search');
 
+    const parsedMaxPrice = maxPrice ? Number(maxPrice) : 50000;
     setFilters({
       category: cat || null,
       metal: metal || null,
       finish: finish || null,
       minPrice: 0,
-      maxPrice: maxPrice ? Number(maxPrice) : 50000,
+      maxPrice: parsedMaxPrice,
       sort: sort || 'newest',
       search: q || '',
     });
+    setSliderMaxPrice(parsedMaxPrice);
   }, [searchParams]);
 
-  const applyClientSideFilters = () => {
+  const applyClientSideFilters = (maxPrice: number) => {
     let filtered = [...mockCatalog];
     if (filters.category) {
       filtered = filtered.filter(p => p.category.toString() === filters.category);
@@ -174,7 +196,7 @@ function ShopContent() {
     if (filters.finish && filters.finish !== 'ALL') {
       filtered = filtered.filter(p => p.finish.toString() === filters.finish);
     }
-    filtered = filtered.filter(p => p.priceINR <= filters.maxPrice);
+    filtered = filtered.filter(p => p.priceINR <= maxPrice);
     
     // Sort
     if (filters.sort === 'price_asc') {
@@ -191,24 +213,24 @@ function ShopContent() {
     async function fetchProducts() {
       setLoading(true);
       try {
-        const url = buildProductsUrl(filters, 1);
+        const url = buildProductsUrl(filters, 1, debouncedMaxPrice);
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setProducts(data.products || mockCatalog);
         } else {
           // Graceful fallback to filtered mock client-side
-          applyClientSideFilters();
+          applyClientSideFilters(debouncedMaxPrice);
         }
       } catch (err) {
-        applyClientSideFilters();
+        applyClientSideFilters(debouncedMaxPrice);
       } finally {
         setLoading(false);
       }
     }
 
     fetchProducts();
-  }, [filters]);
+  }, [debouncedMaxPrice, filters.category, filters.metal, filters.finish, filters.sort, filters.search]);
 
   const handleCategoryChange = (cat: string) => {
     setFilters(prev => ({
@@ -227,6 +249,7 @@ function ShopContent() {
       search: '',
       sort: 'newest',
     });
+    setSliderMaxPrice(50000);
     router.push('/shop');
   };
 
@@ -333,15 +356,15 @@ function ShopContent() {
             <div className="space-y-3">
               <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wide">
                 <h4 className="font-display">Max Price</h4>
-                <span className="font-mono text-accent">₹{filters.maxPrice}</span>
+                <span className="font-mono text-accent">₹{sliderMaxPrice}</span>
               </div>
               <input
                 type="range"
                 min="0"
                 max="50000"
                 step="500"
-                value={filters.maxPrice}
-                onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: Number(e.target.value) }))}
+                value={sliderMaxPrice}
+                onChange={(e) => setSliderMaxPrice(Number(e.target.value))}
                 className="w-full accent-accent cursor-pointer"
               />
             </div>
@@ -440,15 +463,15 @@ function ShopContent() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wide">
                   <h4 className="font-display">Max Price</h4>
-                  <span className="font-mono text-accent">₹{filters.maxPrice}</span>
+                  <span className="font-mono text-accent">₹{sliderMaxPrice}</span>
                 </div>
                 <input
                   type="range"
                   min="0"
                   max="50000"
                   step="500"
-                  value={filters.maxPrice}
-                  onChange={(e) => setFilters(prev => ({ ...prev, maxPrice: Number(e.target.value) }))}
+                  value={sliderMaxPrice}
+                  onChange={(e) => setSliderMaxPrice(Number(e.target.value))}
                   className="w-full accent-accent cursor-pointer"
                 />
               </div>

@@ -271,10 +271,7 @@ export default function RootLayout({
                 </button>
               </form>
             </div>
-            {/* Haste Industries Attribution — subtle */}
-            <p className="text-[10px] text-[#2a2a2a] font-mono tracking-widest text-center mt-8 select-none">
-              RAJSHREE JEWELS ADMIN · POWERED BY HASTE INDUSTRIES
-            </p>
+
           </div>
         </body>
       </html>
@@ -405,13 +402,30 @@ export default function RootLayout({
               >
                 <span>Logout</span>
               </button>
-              {/* Haste Industries Attribution — subtle */}
-              <div className="px-4 py-3 border-t border-[#1a1a1a] mt-4" style={{ backgroundColor: '#0a0a0a' }}>
-                <p className="text-[10px] text-[#333] font-mono tracking-widest uppercase text-center" style={{ margin: 0 }}>
-                  Built by
-                </p>
-                <p className="text-[10px] text-[#444] font-mono tracking-widest uppercase text-center mt-0.5" style={{ margin: 0 }}>
-                  Haste Industries
+              {/* Bottom of sidebar — Haste Industries credit */}
+              <div 
+                className="sidebar-logo"
+                style={{ 
+                  padding: '12px 16px',
+                  borderTop: '1px solid #1a1a1a',
+                  marginTop: 'auto',
+                  overflow: 'hidden',
+                }}
+              >
+                <p style={{ 
+                  fontSize: '9px', 
+                  color: '#2a2a2a', 
+                  fontFamily: 'monospace',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  textAlign: 'center',
+                  lineHeight: '1.6',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  margin: 0,
+                }}>
+                  Built by Haste Industries
                 </p>
               </div>
             </div>
