@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 import { Product, ItemStatus } from '../../types';
 import { trackEvent } from '../../lib/analytics';
 import { useSession } from 'next-auth/react';
@@ -179,13 +178,10 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
         {/* Left Column: Image Gallery */}
         <div className="flex flex-col space-y-4">
           <div className="relative aspect-square w-full bg-white border border-border-custom rounded-card overflow-hidden">
-            <Image
+            <img
               src={currentImage.urlFull || currentImage.urlMedium}
               alt={currentImage.altText || product.displayName}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-cover"
+              className="absolute inset-0 w-full h-full object-cover"
             />
             {product.status === ItemStatus.SOLD && (
               <div className="absolute inset-0 bg-primary/30 backdrop-blur-[1px] flex items-center justify-center">
@@ -205,12 +201,10 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
                   onClick={() => setSelectedImageIdx(idx)}
                   className={`relative w-20 h-20 border rounded-card overflow-hidden flex-shrink-0 transition-all ${selectedImageIdx === idx ? 'border-accent ring-2 ring-accent/20 scale-95' : 'border-border-custom hover:border-accent'}`}
                 >
-                  <Image
+                  <img
                     src={img.urlThumb || img.urlMedium}
                     alt={img.altText || `Thumbnail ${idx + 1}`}
-                    fill
-                    sizes="80px"
-                    className="object-cover"
+                    className="absolute inset-0 w-full h-full object-cover"
                   />
                 </button>
               ))}

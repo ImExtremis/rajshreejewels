@@ -882,7 +882,7 @@ router.put(
       metaTitle: z.string(),
       metaDescription: z.string(),
       keywords: z.array(z.string()),
-      occasion: z.string(),
+      occasion: z.string().nullable().optional(),
       status: z.enum(['AVAILABLE', 'SOLD', 'UNLISTED']),
     }).partial();
 
@@ -899,7 +899,7 @@ router.put(
     if (data.description !== undefined) sanitisedData.description = sanitiseHtml(data.description);
     if (data.metaTitle !== undefined) sanitisedData.metaTitle = stripHtml(data.metaTitle);
     if (data.metaDescription !== undefined) sanitisedData.metaDescription = stripHtml(data.metaDescription);
-    if (data.occasion !== undefined) sanitisedData.occasion = stripHtml(data.occasion);
+    if (data.occasion !== undefined) sanitisedData.occasion = data.occasion ? stripHtml(data.occasion) : null;
     if (data.keywords !== undefined) {
       sanitisedData.keywords = data.keywords.map(kw => stripHtml(kw)).filter(Boolean);
     }

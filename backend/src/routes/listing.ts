@@ -222,8 +222,8 @@ router.post('/publish/:productId', auth, requirePermission('listing.publish'), a
       return res.status(404).json({ error: 'Product not found' });
     }
 
-    if (product.status !== 'UNLISTED' || !product.aiEnhanced) {
-      return res.status(400).json({ error: 'Product must be UNLISTED and aiEnhanced to be published' });
+    if (product.status !== 'UNLISTED') {
+      return res.status(400).json({ error: 'Product must be UNLISTED to be published' });
     }
 
     const { displayName, description } = req.body;
@@ -235,6 +235,7 @@ router.post('/publish/:productId', auth, requirePermission('listing.publish'), a
         description: description || product.description,
         status: 'AVAILABLE',
         listedAt: new Date(),
+        aiEnhanced: true,
       }
     });
 

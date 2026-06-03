@@ -2,7 +2,6 @@
 
 import React from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Product, ItemStatus } from '../../types';
 
 interface ProductCardProps {
@@ -19,12 +18,10 @@ export default function ProductCard({ product }: ProductCardProps) {
       
       {/* Image container */}
       <div className="relative aspect-square w-full bg-white overflow-hidden">
-        <Image
+        <img
           src={product.primaryImageUrl}
           alt={product.displayName}
-          fill
-          sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
-          className={`object-cover transition-transform duration-500 ${!isSold && 'group-hover:scale-105'}`}
+          className={`absolute inset-0 w-full h-full object-cover transition-transform duration-500 ${!isSold && 'group-hover:scale-105'}`}
           loading="lazy"
         />
 

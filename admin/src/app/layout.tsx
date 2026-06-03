@@ -271,8 +271,8 @@ export default function RootLayout({
                 </button>
               </form>
 
-              <div style={{ textAlign: 'center', marginTop: '20px' }}>
-                <span style={{ fontSize: '9px', color: '#2a2a2a', fontFamily: 'monospace', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              <div style={{ textAlign: 'center', marginTop: '20px', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '8px', color: '#1a1a1a', fontFamily: 'monospace', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                   Built by Haste Industries
                 </span>
               </div>
