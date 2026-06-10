@@ -1,82 +1,83 @@
 const API_BASE_URL = typeof window !== 'undefined'
-  ? '/api/v1'                                          // Browser: relative -> goes through Nginx
-  : (process.env.BACKEND_URL || 'http://backend:4000') + '/api/v1';  // SSR: Docker service name
+  ? '/api/v1'
+  : (process.env.BACKEND_URL || 'http://backend:4000') + '/api/v1';
+
+async function getSessionAccessToken(): Promise<string | undefined> {
+  if (typeof window !== 'undefined') {
+    try {
+      const { getSession } = await import('next-auth/react');
+      const session = await getSession();
+      return session?.accessToken;
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  try {
+    const { auth } = await import('./auth');
+    const session = await auth();
+    return session?.accessToken;
+  } catch (_) {
+    return undefined;
+  }
+}
+
+function toHeaderObject(headers: Headers): Record<string, string> {
+  const headersObj: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    headersObj[key] = value;
+  });
+  return headersObj;
+}
 
 export async function apiFetch<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
-  
   const headers = new Headers(options.headers || {});
+
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
-  // Retrieve auth token from localStorage or NextAuth session
-  let token = null;
-  if (typeof window !== 'undefined') {
-    token = localStorage.getItem('access_token');
-    if (!token) {
-      try {
-        const { getSession } = require('next-auth/react');
-        const session = await getSession();
-        token = session?.accessToken;
-        if (token) {
-          localStorage.setItem('access_token', token);
-        }
-      } catch (_) {}
-    }
-  } else {
-    // SSR: retrieve NextAuth session server-side
-    try {
-      const { auth } = require('./auth');
-      const session = await auth();
-      token = session?.accessToken;
-    } catch (_) {}
-  }
+  const storedToken = typeof window !== 'undefined' ? localStorage.getItem('access_token') : undefined;
+  const sessionToken = await getSessionAccessToken();
+  const token = sessionToken || storedToken;
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const headersObj: Record<string, string> = {};
-  headers.forEach((value, key) => {
-    headersObj[key] = value;
-  });
-
   let response = await fetch(url, {
     ...options,
-    headers: headersObj,
+    headers: toHeaderObject(headers),
   });
 
-  // Handle 401: Silent Refresh
   if (response.status === 401 && typeof window !== 'undefined') {
-    try {
-      const refreshRes = await fetch('/api/v1/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    const refreshedToken = await getSessionAccessToken();
+    if (refreshedToken && refreshedToken !== token) {
+      localStorage.setItem('access_token', refreshedToken);
+      headers.set('Authorization', `Bearer ${refreshedToken}`);
+      response = await fetch(url, {
+        ...options,
+        headers: toHeaderObject(headers),
       });
-      if (refreshRes.ok) {
-        const { accessToken: newAccessToken } = await refreshRes.json();
-        localStorage.setItem('access_token', newAccessToken);
-        headers.set('Authorization', `Bearer ${newAccessToken}`);
-        
-        const newHeadersObj: Record<string, string> = {};
-        headers.forEach((value, key) => {
-          newHeadersObj[key] = value;
+    } else {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (refreshToken) {
+        const refreshRes = await fetch('/api/v1/auth/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
         });
-
-        // Retry original request with new token
-        response = await fetch(url, {
-          ...options,
-          headers: newHeadersObj,
-        });
-      } else {
-        // Refresh failed -> clear stale token and redirect to login
-        localStorage.removeItem('access_token');
-        window.location.href = '/auth/login';
-        throw new Error('Session expired');
+        if (refreshRes.ok) {
+          const { accessToken: newAccessToken } = await refreshRes.json();
+          localStorage.setItem('access_token', newAccessToken);
+          headers.set('Authorization', `Bearer ${newAccessToken}`);
+          response = await fetch(url, {
+            ...options,
+            headers: toHeaderObject(headers),
+          });
+        }
       }
-    } catch (err: any) {
-      console.error('❌ Silent token refresh failed:', err);
     }
   }
 
@@ -84,7 +85,7 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
     let errorMessage = 'An error occurred';
     try {
       const errorData = await response.json();
-      errorMessage = errorData.error || errorMessage;
+      errorMessage = errorData.message || errorData.error || errorMessage;
     } catch (_) {}
     throw new Error(errorMessage);
   }
@@ -92,15 +93,15 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
   return response.json() as Promise<T>;
 }
 
-// Client-side fetch with auto auth
 export async function apiClient(
   endpoint: string,
   options: RequestInit = {},
   accessToken?: string
 ): Promise<Response> {
+  const token = accessToken || await getSessionAccessToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -109,24 +110,32 @@ export async function apiClient(
     headers,
   });
 
-  // Handle 401 — token expired
-  if (res.status === 401) {
-    // Try refresh
-    try {
-      const refreshRes = await fetch('/api/v1/auth/refresh', {
-        method: 'POST',
-        credentials: 'include',
+  if (res.status !== 401) {
+    return res;
+  }
+
+  const refreshedToken = await getSessionAccessToken();
+  if (refreshedToken && refreshedToken !== token) {
+    return fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: { ...headers, Authorization: `Bearer ${refreshedToken}` },
+    });
+  }
+
+  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+  if (refreshToken) {
+    const refreshRes = await fetch('/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (refreshRes.ok) {
+      const { accessToken: newAccessToken } = await refreshRes.json();
+      localStorage.setItem('access_token', newAccessToken);
+      return fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: { ...headers, Authorization: `Bearer ${newAccessToken}` },
       });
-      if (refreshRes.ok) {
-        const { accessToken: newToken } = await refreshRes.json();
-        // Retry with new token
-        return fetch(`${API_BASE_URL}${endpoint}`, {
-          ...options,
-          headers: { ...headers, Authorization: `Bearer ${newToken}` },
-        });
-      }
-    } catch {
-      // Refresh failed — return original 401
     }
   }
 

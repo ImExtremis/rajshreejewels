@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, ItemStatus } from '../../types';
 import { trackEvent } from '../../lib/analytics';
+import { apiClient } from '../../lib/api';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
@@ -15,7 +16,9 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
   const { data: session } = useSession();
   const [product, setProduct] = useState<Product>(initialProduct);
   const [selectedImageIdx, setSelectedImageIdx] = useState<number>(0);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
+  const [buyingNow, setBuyingNow] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
 
@@ -68,6 +71,15 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
     : [{ id: 'default', urlMedium: product.primaryImageUrl, urlFull: product.primaryImageUrl, altText: product.displayName }];
 
   const currentImage = imagesList[selectedImageIdx] || imagesList[0];
+  const canNavigateImages = imagesList.length > 1;
+
+  const selectPreviousImage = () => {
+    setSelectedImageIdx((idx) => (idx - 1 + imagesList.length) % imagesList.length);
+  };
+
+  const selectNextImage = () => {
+    setSelectedImageIdx((idx) => (idx + 1) % imagesList.length);
+  };
 
   // Poll product details every 30 seconds to fetch real-time availability status
   useEffect(() => {
@@ -104,14 +116,10 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
       
       setAddingToCart(true);
       
-      const res = await fetch('/api/v1/cart/add', {
+      const res = await apiClient('/cart/add', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.accessToken}`,
-        },
         body: JSON.stringify({ productId: product.id }),
-      });
+      }, session.accessToken);
       
       if (!res.ok) {
         const err = await res.json();
@@ -132,6 +140,23 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
       triggerToast(err.message || 'Failed to add to cart');
     } finally {
       setAddingToCart(false);
+    }
+  };
+
+  const handleBuyNow = async () => {
+    try {
+      if (!session?.accessToken) {
+        router.push(`/auth/login?redirect=${encodeURIComponent(`/checkout?productId=${product.id}`)}`);
+        return;
+      }
+      
+      setBuyingNow(true);
+      router.push(`/checkout?productId=${product.id}`);
+    } catch (err: any) {
+      console.error('Buy Now error:', err);
+      triggerToast(err.message || 'Failed to initiate purchase');
+    } finally {
+      setBuyingNow(false);
     }
   };
 
@@ -177,12 +202,45 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
         
         {/* Left Column: Image Gallery */}
         <div className="flex flex-col space-y-4">
-          <div className="relative aspect-square w-full bg-white border border-border-custom rounded-card overflow-hidden">
+          <div
+            className="relative aspect-square w-full bg-white border border-border-custom rounded-card overflow-hidden group/image"
+            onMouseMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setZoomPos({
+                x: ((e.clientX - rect.left) / rect.width) * 100,
+                y: ((e.clientY - rect.top) / rect.height) * 100,
+              });
+            }}
+          >
             <img
               src={currentImage.urlFull || currentImage.urlMedium}
               alt={currentImage.altText || product.displayName}
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-200 ease-out md:group-hover/image:scale-150"
+              style={{ transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` }}
             />
+            {canNavigateImages && (
+              <>
+                <button
+                  type="button"
+                  onClick={selectPreviousImage}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-surface/90 border border-border-custom text-primary shadow hover:text-accent transition-colors"
+                  aria-label="Previous product image"
+                >
+                  <span aria-hidden="true">&#8249;</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={selectNextImage}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-surface/90 border border-border-custom text-primary shadow hover:text-accent transition-colors"
+                  aria-label="Next product image"
+                >
+                  <span aria-hidden="true">&#8250;</span>
+                </button>
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary/70 text-white px-3 py-1 text-[10px] font-body font-bold tracking-wider">
+                  {selectedImageIdx + 1} / {imagesList.length}
+                </div>
+              </>
+            )}
             {product.status === ItemStatus.SOLD && (
               <div className="absolute inset-0 bg-primary/30 backdrop-blur-[1px] flex items-center justify-center">
                 <span className="font-display text-4xl font-extrabold tracking-widest text-white border-4 border-white px-6 py-3 uppercase rotate-[-6deg]">
@@ -272,19 +330,35 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
 
           {/* Action Buttons */}
           <div className="flex flex-col space-y-3">
-            <button
-              onClick={handleAddToCart}
-              disabled={!isAvailable || addingToCart}
-              className={`w-full py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-primary text-surface hover:bg-accent' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
-            >
-              {product.status === ItemStatus.SOLD 
-                ? 'SOLD OUT' 
-                : product.status === ItemStatus.RESERVED 
-                  ? 'RESERVED' 
-                  : addingToCart 
-                    ? 'Adding...' 
-                    : 'Add to Cart'}
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={handleAddToCart}
+                disabled={!isAvailable || addingToCart}
+                className={`py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-primary text-surface hover:bg-accent' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
+              >
+                {product.status === ItemStatus.SOLD 
+                  ? 'SOLD OUT' 
+                  : product.status === ItemStatus.RESERVED 
+                    ? 'RESERVED' 
+                    : addingToCart 
+                      ? 'Adding...' 
+                      : 'Add to Cart'}
+              </button>
+              
+              <button
+                onClick={handleBuyNow}
+                disabled={!isAvailable || buyingNow}
+                className={`py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-accent text-primary hover:bg-primary hover:text-surface font-semibold' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
+              >
+                {product.status === ItemStatus.SOLD 
+                  ? 'SOLD OUT' 
+                  : product.status === ItemStatus.RESERVED 
+                    ? 'RESERVED' 
+                    : buyingNow 
+                      ? 'Processing...' 
+                      : 'Buy Now'}
+              </button>
+            </div>
             
             {isAvailable && (
               <p className="text-[10px] text-accent text-center font-bold tracking-wide animate-pulse uppercase">

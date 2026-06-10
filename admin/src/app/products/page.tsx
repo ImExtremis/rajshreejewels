@@ -230,7 +230,7 @@ export default function ProductsPage() {
   };
 
   const handleDeleteProduct = async (productId: string) => {
-    if (!confirm('Are you sure you want to soft delete this product? It will preserve order history but hide it permanently.')) return;
+    if (!confirm('Permanently delete this product? Products with order history cannot be deleted and should be unlisted instead.')) return;
 
     try {
       const token = localStorage.getItem('admin_token');
@@ -241,9 +241,12 @@ export default function ProductsPage() {
         }
       });
 
-      if (!res.ok) throw new Error('Failed to soft delete product');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || 'Failed to delete product');
+      }
 
-      showSuccess('Product deleted (unlisted) successfully');
+      showSuccess('Product deleted permanently');
       fetchProducts();
     } catch (err: any) {
       showError(err.message || 'Failed to delete product');
@@ -383,7 +386,6 @@ export default function ProductsPage() {
 
                       <button
                         onClick={() => handleDeleteProduct(p.id)}
-                        disabled={p.status === 'UNLISTED'}
                         className="btn btn-danger"
                         style={{ padding: '4px 8px', fontSize: '10px' }}
                       >

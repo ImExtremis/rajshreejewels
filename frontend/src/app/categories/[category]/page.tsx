@@ -3,67 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import ProductCard from '../../../components/product/ProductCard';
-import { Product, Category, ItemStatus } from '../../../types';
-
-// Mock catalog for filtering fallback
-const mockCatalog: Product[] = [
-  {
-    id: 'p1',
-    slug: 'kundan-bridal-choker-set-brass-kundan-kp01',
-    name: 'Kundan Choker',
-    displayName: 'Kundan Bridal Floral Choker Set',
-    description: 'A spectacular, royal Kundan choker set complete with matching earrings.',
-    shortDesc: 'Premium Jaipur Kundan choker set with earrings.',
-    category: Category.SET,
-    metal: 'BRASS' as any,
-    finish: 'KUNDAN' as any,
-    priceINR: 2499,
-    originalPriceINR: 3499,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: [],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p2',
-    slug: 'gold-polish-bangles-set-gold-1gram-gold-polish-bg02',
-    name: '1-Gram Bangles',
-    displayName: '1-Gram Gold Polish Filigree Bangles (Set of 4)',
-    description: 'Exquisite 1-gram gold polish bangles showcasing delicate filigree craftsmanship.',
-    shortDesc: 'Filigree filleted 1-gram gold polish bangles.',
-    category: Category.BANGLES,
-    metal: 'GOLD_1GRAM' as any,
-    finish: 'GOLD_POLISH' as any,
-    priceINR: 1299,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: [],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p3',
-    slug: 'oxidised-silver-jhumka-silver-oxidised-er03',
-    name: 'Oxidised Jhumkas',
-    displayName: 'Oxidised Silver Traditional Peacock Jhumkas',
-    description: 'Charming oxidised silver jhumka earrings featuring twin-peacock motifs.',
-    shortDesc: 'Peacock motif oxidised silver jhumka earrings.',
-    category: Category.EARRINGS,
-    metal: 'SILVER' as any,
-    finish: 'OXIDISED' as any,
-    priceINR: 499,
-    originalPriceINR: 799,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: [],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+import { Product, Category } from '../../../types';
 
 interface CategoryPageProps {
   params: {
@@ -102,24 +42,14 @@ export default function CategoryPage({ params }: CategoryPageProps) {
           const data = await res.json();
           setProducts(data.products || []);
         } else {
-          fallbackFilter();
+          setProducts([]);
         }
       } catch (err) {
-        fallbackFilter();
+        setProducts([]);
       } finally {
         setLoading(false);
       }
     }
-
-    const fallbackFilter = () => {
-      let filtered = [...mockCatalog];
-      if (matchedKey) {
-        filtered = filtered.filter(p => p.category.toString() === matchedKey);
-      } else if (params.category === '1-gram-gold') {
-        filtered = filtered.filter(p => p.metal.toString() === 'GOLD_1GRAM');
-      }
-      setProducts(filtered);
-    };
 
     fetchCategoryProducts();
   }, [matchedKey, params.category]);

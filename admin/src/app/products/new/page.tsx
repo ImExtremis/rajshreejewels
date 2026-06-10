@@ -36,6 +36,7 @@ export default function NewListingPage() {
   const [images, setImages] = useState<UploadedImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [draggingImageId, setDraggingImageId] = useState<string | null>(null);
 
   // AI Pipeline States
   const [isEnhancing, setIsEnhancing] = useState(false);
@@ -134,10 +135,13 @@ export default function NewListingPage() {
   // Drag to reorder images
   const handleDragStart = (e: React.DragEvent, index: number) => {
     e.dataTransfer.setData('text/plain', index.toString());
+    setDraggingImageId(images[index]?.id || null);
   };
 
   const handleDropImage = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
     const sourceIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    setDraggingImageId(null);
     if (isNaN(sourceIndex) || sourceIndex === targetIndex) return;
 
     setImages(prev => {
@@ -573,16 +577,21 @@ export default function NewListingPage() {
                     key={img.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, idx)}
+                    onDragEnd={() => setDraggingImageId(null)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => handleDropImage(e, idx)}
                     style={{
                       position: 'relative',
                       aspectRatio: '1',
-                      border: '1px solid #222',
+                      border: draggingImageId && draggingImageId !== img.id ? '1px dashed #C9A84C' : '1px solid #222',
                       borderRadius: '4px',
                       background: '#111',
                       overflow: 'hidden',
-                      cursor: 'grab'
+                      cursor: 'grab',
+                      transform: draggingImageId === img.id ? 'scale(0.94)' : 'scale(1)',
+                      opacity: draggingImageId === img.id ? 0.55 : 1,
+                      transition: 'transform 160ms ease, opacity 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+                      boxShadow: draggingImageId && draggingImageId !== img.id ? '0 0 0 2px rgba(201, 168, 76, 0.12)' : 'none'
                     }}
                   >
                     <img
@@ -592,6 +601,9 @@ export default function NewListingPage() {
                     />
                     <div style={{ position: 'absolute', top: '2px', left: '2px', background: 'rgba(0,0,0,0.7)', color: '#C9A84C', fontSize: '8px', padding: '1px 4px', borderRadius: '2px', fontWeight: 'bold' }}>
                       {idx === 0 ? 'PRIMARY' : idx + 1}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: '2px', left: '2px', right: '2px', background: 'rgba(0,0,0,0.62)', color: '#ddd', fontSize: '8px', padding: '2px 4px', borderRadius: '2px', textAlign: 'center', opacity: draggingImageId ? 1 : 0, transition: 'opacity 160ms ease' }}>
+                      Drop to place
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); removeImage(img.id); }}

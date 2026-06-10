@@ -2,11 +2,17 @@ import { redirect } from 'next/navigation';
 import { auth } from '../../lib/auth';
 import CheckoutClient from './CheckoutClient';
 
-export default async function CheckoutPage() {
+interface PageProps {
+  searchParams: { [key: string]: string | undefined };
+}
+
+export default async function CheckoutPage({ searchParams }: PageProps) {
   const session = await auth();
 
   if (!session || !session.user) {
-    redirect('/auth/login?redirect=/checkout');
+    const productId = searchParams?.productId;
+    const redirectUrl = productId ? `/checkout?productId=${productId}` : '/checkout';
+    redirect(`/auth/login?redirect=${encodeURIComponent(redirectUrl)}`);
   }
 
   const sessionUser = {

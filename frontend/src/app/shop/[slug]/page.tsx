@@ -3,85 +3,7 @@ export const revalidate = 3600; // Cache for 1 hour by default, revalidated on d
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import ProductDetailClient from '../../../components/product/ProductDetailClient';
-import { Product, Category, Metal, Finish, ItemStatus } from '../../../types';
-
-// Mock catalog for SSR fallback
-const mockCatalog: Product[] = [
-  {
-    id: 'p1',
-    slug: 'kundan-bridal-choker-set-brass-kundan-kp01',
-    name: 'Kundan Choker',
-    displayName: 'Kundan Bridal Floral Choker Set',
-    description: 'A spectacular, royal Kundan choker set complete with matching earrings. Intricately handcrafted in Jaipur, showcasing premium glass ruby beads and fine meenakari work on reverse. Perfect for weddings and grand festive occasions.',
-    shortDesc: 'Premium Jaipur Kundan choker set with earrings.',
-    category: Category.SET,
-    metal: Metal.BRASS,
-    finish: Finish.KUNDAN,
-    priceINR: 2499,
-    originalPriceINR: 3499,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['kundan', 'set'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p2',
-    slug: 'gold-polish-bangles-set-gold-1gram-gold-polish-bg02',
-    name: '1-Gram Bangles',
-    displayName: '1-Gram Gold Polish Filigree Bangles (Set of 4)',
-    description: 'Exquisite 1-gram gold polish bangles showcasing delicate classic filigree craftsmanship. These premium copper-base bangles mimic solid gold perfectly and feature a highly durable anti-tarnish micro-plating.',
-    shortDesc: 'Filigree filleted 1-gram gold polish bangles.',
-    category: Category.BANGLES,
-    metal: Metal.GOLD_1GRAM,
-    finish: Finish.GOLD_POLISH,
-    priceINR: 1299,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['bangles', 'gold'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p3',
-    slug: 'oxidised-silver-jhumka-silver-oxidised-er03',
-    name: 'Oxidised Jhumkas',
-    displayName: 'Oxidised Silver Traditional Peacock Jhumkas',
-    description: 'Charming oxidised silver jhumka earrings featuring elegant twin-peacock motifs and tiny white pearls. Extremely lightweight and perfectly styled for bohemian, casual, or ethnic daywear.',
-    shortDesc: 'Peacock motif oxidised silver jhumka earrings.',
-    category: Category.EARRINGS,
-    metal: Metal.SILVER,
-    finish: Finish.OXIDISED,
-    priceINR: 499,
-    originalPriceINR: 799,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['earrings', 'jhumka'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p4',
-    slug: 'antique-matte-floral-necklace-brass-antique-nl04',
-    name: 'Floral Necklace',
-    displayName: 'Antique Matte Gold Leaf Floral Temple Necklace',
-    description: 'A grand temple style necklace set in deep antique matte finish with delicate jasmine leaf shapes and ruby-red accents. Offers a highly premium, solid traditional weight and appearance.',
-    shortDesc: 'Deep antique matte traditional floral necklace.',
-    category: Category.NECKLACE,
-    metal: Metal.BRASS,
-    finish: Finish.ANTIQUE,
-    priceINR: 1899,
-    status: ItemStatus.SOLD,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['necklace', 'antique'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+import { Product, ItemStatus } from '../../../types';
 
 // Helper to fetch single product details (SSR with tag-based caching)
 async function getProduct(slug: string): Promise<Product | null> {
@@ -93,10 +15,9 @@ async function getProduct(slug: string): Promise<Product | null> {
     if (res.ok) {
       return await res.json();
     }
-  } catch (err) { }
+  } catch (err) {}
 
-  // Graceful fallback to mock data during static compile or if API is offline
-  return mockCatalog.find(p => p.slug === slug) || null;
+  return null;
 }
 
 interface PageProps {

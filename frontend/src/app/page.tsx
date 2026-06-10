@@ -2,85 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import ProductCard from '../components/product/ProductCard';
-import { Product, ItemStatus, Category, Metal, Finish } from '../types';
-
-// Mock products for pristine display on first load
-const mockArrivals: Product[] = [
-  {
-    id: 'p1',
-    slug: 'kundan-bridal-choker-set-brass-kundan-kp01',
-    name: 'Kundan Choker',
-    displayName: 'Kundan Bridal Floral Choker Set',
-    description: 'A spectacular, royal Kundan choker set complete with matching earrings. Intricately handcrafted in Jaipur, showcasing premium glass ruby beads and fine meenakari work on reverse. Perfect for weddings and grand festive occasions.',
-    shortDesc: 'Premium Jaipur Kundan choker set with earrings.',
-    category: Category.SET,
-    metal: Metal.BRASS,
-    finish: Finish.KUNDAN,
-    priceINR: 2499,
-    originalPriceINR: 3499,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop', // Beautiful placeholder
-    images: [],
-    keywords: ['kundan choker set', 'bridal artificial set'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p2',
-    slug: 'gold-polish-bangles-set-gold-1gram-gold-polish-bg02',
-    name: '1-Gram Bangles',
-    displayName: '1-Gram Gold Polish Filigree Bangles (Set of 4)',
-    description: 'Exquisite 1-gram gold polish bangles showcasing delicate classic filigree craftsmanship. These premium copper-base bangles mimic solid gold perfectly and feature a highly durable anti-tarnish micro-plating.',
-    shortDesc: 'Filigree filleted 1-gram gold polish bangles.',
-    category: Category.BANGLES,
-    metal: Metal.GOLD_1GRAM,
-    finish: Finish.GOLD_POLISH,
-    priceINR: 1299,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['1 gram gold bangles', 'artificial bangles set'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p3',
-    slug: 'oxidised-silver-jhumka-silver-oxidised-er03',
-    name: 'Oxidised Jhumkas',
-    displayName: 'Oxidised Silver Traditional Peacock Jhumkas',
-    description: 'Charming oxidised silver jhumka earrings featuring elegant twin-peacock motifs and tiny white pearls. Extremely lightweight and perfectly styled for bohemian, casual, or ethnic daywear.',
-    shortDesc: 'Peacock motif oxidised silver jhumka earrings.',
-    category: Category.EARRINGS,
-    metal: Metal.SILVER,
-    finish: Finish.OXIDISED,
-    priceINR: 499,
-    originalPriceINR: 799,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['oxidised silver jhumkas', 'boho earrings online'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p4',
-    slug: 'antique-matte-floral-necklace-brass-antique-nl04',
-    name: 'Floral Necklace',
-    displayName: 'Antique Matte Gold Leaf Floral Temple Necklace',
-    description: 'A grand temple style necklace set in deep antique matte finish with delicate jasmine leaf shapes and ruby-red accents. Offers a highly premium, solid traditional weight and appearance.',
-    shortDesc: 'Deep antique matte traditional floral necklace.',
-    category: Category.NECKLACE,
-    metal: Metal.BRASS,
-    finish: Finish.ANTIQUE,
-    priceINR: 1899,
-    status: ItemStatus.SOLD, // Social proof test
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['antique temple necklace', 'matte gold jewellery'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+import { Product } from '../types';
 
 const categoryTiles = [
   { name: '1-Gram Gold', slug: 'necklace?metal=GOLD_1GRAM', img: 'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?q=80&w=300&auto=format&fit=crop' },
@@ -93,7 +15,23 @@ const categoryTiles = [
   { name: 'Anklets', slug: 'anklet', img: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=300&auto=format&fit=crop' }
 ];
 
-export default function Homepage() {
+async function getNewArrivals(): Promise<Product[]> {
+  try {
+    const BACKEND = process.env.BACKEND_URL || 'http://backend:4000';
+    const res = await fetch(`${BACKEND}/api/v1/products?sort=newest&limit=4`, {
+      next: { tags: ['products'], revalidate: 300 },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.products || [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function Homepage() {
+  const newArrivals = await getNewArrivals();
+
   return (
     <div className="flex flex-col space-y-20 pb-20">
       
@@ -223,11 +161,19 @@ export default function Homepage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {mockArrivals.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        {newArrivals.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {newArrivals.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12 bg-surface-2 border border-border-custom rounded-card">
+            <p className="font-body text-xs text-text-muted uppercase tracking-wider">
+              No new arrivals are live yet.
+            </p>
+          </div>
+        )}
       </section>
 
     </div>

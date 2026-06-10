@@ -59,6 +59,10 @@ const getRefreshTokenFromCookie = (req: Request): string | undefined => {
   return cookies.refreshToken;
 };
 
+const getRefreshToken = (req: Request): string | undefined => {
+  return getRefreshTokenFromCookie(req) || req.body?.refreshToken;
+};
+
 // Helper: Token generators
 const generateAccessToken = (userId: string, email: string, isAdmin: boolean, isOwner: boolean = false): string => {
   const payload: JWTPayload = { userId, email, isAdmin, isOwner };
@@ -141,6 +145,7 @@ router.post(
 
       return res.status(201).json({
         accessToken,
+        refreshToken,
         user: {
           id: updated.id,
           name: updated.name,
@@ -211,6 +216,7 @@ router.post(
 
     res.status(201).json({
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,
@@ -270,6 +276,7 @@ router.post(
 
     res.json({
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,
@@ -382,6 +389,7 @@ router.post(
 
     res.json({
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,
@@ -399,7 +407,7 @@ router.post(
 router.post(
   '/refresh',
   catchAsync(async (req: Request, res: Response) => {
-    const refreshToken = getRefreshTokenFromCookie(req);
+    const refreshToken = getRefreshToken(req);
     if (!refreshToken) {
       throw new AppError('Refresh token is missing', 401, 'UNAUTHORIZED');
     }
@@ -566,6 +574,7 @@ router.post(
 
     res.json({
       accessToken,
+      refreshToken,
       user: {
         id: user.id,
         name: user.name,

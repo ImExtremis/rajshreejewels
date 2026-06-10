@@ -39,6 +39,7 @@ async function handleRevalidation(request: NextRequest) {
       revalidatePath('/shop');
       revalidatePath('/'); // refresh homepage grids if any
       revalidateTag(`product-${slug}`);
+      revalidateTag('products');
       return NextResponse.json({ revalidated: true, type: 'slug', target: slug, timestamp: Date.now() });
     }
 

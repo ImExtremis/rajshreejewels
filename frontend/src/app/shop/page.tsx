@@ -3,85 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ProductCard from '../../components/product/ProductCard';
-import { Product, Category, Metal, Finish, ItemStatus } from '../../types';
-
-// Mock catalog for testing fallback
-const mockCatalog: Product[] = [
-  {
-    id: 'p1',
-    slug: 'kundan-bridal-choker-set-brass-kundan-kp01',
-    name: 'Kundan Choker',
-    displayName: 'Kundan Bridal Floral Choker Set',
-    description: 'A spectacular, royal Kundan choker set complete with matching earrings.',
-    shortDesc: 'Premium Jaipur Kundan choker set with earrings.',
-    category: Category.SET,
-    metal: Metal.BRASS,
-    finish: Finish.KUNDAN,
-    priceINR: 2499,
-    originalPriceINR: 3499,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['kundan', 'set'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p2',
-    slug: 'gold-polish-bangles-set-gold-1gram-gold-polish-bg02',
-    name: '1-Gram Bangles',
-    displayName: '1-Gram Gold Polish Filigree Bangles (Set of 4)',
-    description: 'Exquisite 1-gram gold polish bangles showcasing delicate classic filigree craftsmanship.',
-    shortDesc: 'Filigree filleted 1-gram gold polish bangles.',
-    category: Category.BANGLES,
-    metal: Metal.GOLD_1GRAM,
-    finish: Finish.GOLD_POLISH,
-    priceINR: 1299,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['bangles', 'gold'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p3',
-    slug: 'oxidised-silver-jhumka-silver-oxidised-er03',
-    name: 'Oxidised Jhumkas',
-    displayName: 'Oxidised Silver Traditional Peacock Jhumkas',
-    description: 'Charming oxidised silver jhumka earrings featuring elegant twin-peacock motifs.',
-    shortDesc: 'Peacock motif oxidised silver jhumka earrings.',
-    category: Category.EARRINGS,
-    metal: Metal.SILVER,
-    finish: Finish.OXIDISED,
-    priceINR: 499,
-    originalPriceINR: 799,
-    status: ItemStatus.AVAILABLE,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['earrings', 'jhumka'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'p4',
-    slug: 'antique-matte-floral-necklace-brass-antique-nl04',
-    name: 'Floral Necklace',
-    displayName: 'Antique Matte Gold Leaf Floral Temple Necklace',
-    description: 'A grand temple style necklace set in deep antique matte finish with delicate jasmine leaf shapes.',
-    shortDesc: 'Deep antique matte traditional floral necklace.',
-    category: Category.NECKLACE,
-    metal: Metal.BRASS,
-    finish: Finish.ANTIQUE,
-    priceINR: 1899,
-    status: ItemStatus.SOLD,
-    primaryImageUrl: 'https://images.unsplash.com/photo-1599643477877-530eb83abc8e?q=80&w=600&auto=format&fit=crop',
-    images: [],
-    keywords: ['necklace', 'antique'],
-    listedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+import { Product, Category, Metal, Finish } from '../../types';
 
 interface ShopFilters {
   categories: string[];
@@ -151,7 +73,7 @@ function ShopContent() {
   const [sliderMaxPrice, setSliderMaxPrice] = useState<number>(50000);
   const debouncedMaxPrice = useDebounce(sliderMaxPrice, 500);
 
-  const [products, setProducts] = useState<Product[]>(mockCatalog);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState<boolean>(false);
 
@@ -219,29 +141,6 @@ function ShopContent() {
     }
   }, [debouncedMaxPrice]);
 
-  const applyClientSideFilters = (maxPrice: number) => {
-    let filtered = [...mockCatalog];
-    if (filters.categories && filters.categories.length > 0) {
-      filtered = filtered.filter(p => filters.categories.includes(p.category.toString()));
-    }
-    if (filters.metals && filters.metals.length > 0) {
-      filtered = filtered.filter(p => filters.metals.includes(p.metal.toString()));
-    }
-    if (filters.finishes && filters.finishes.length > 0) {
-      filtered = filtered.filter(p => filters.finishes.includes(p.finish.toString()));
-    }
-    filtered = filtered.filter(p => p.priceINR <= maxPrice);
-    
-    // Sort
-    if (filters.sort === 'price_asc') {
-      filtered.sort((a, b) => a.priceINR - b.priceINR);
-    } else if (filters.sort === 'price_desc') {
-      filtered.sort((a, b) => b.priceINR - a.priceINR);
-    }
-    
-    setProducts(filtered);
-  };
-
   // Fetch products from backend with filters
   useEffect(() => {
     async function fetchProducts() {
@@ -251,13 +150,12 @@ function ShopContent() {
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          setProducts(data.products || mockCatalog);
+          setProducts(data.products || []);
         } else {
-          // Graceful fallback to filtered mock client-side
-          applyClientSideFilters(debouncedMaxPrice);
+          setProducts([]);
         }
       } catch (err) {
-        applyClientSideFilters(debouncedMaxPrice);
+        setProducts([]);
       } finally {
         setLoading(false);
       }

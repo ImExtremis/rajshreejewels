@@ -43,6 +43,9 @@ export default function RegisterPage() {
 
       if (typeof window !== 'undefined' && body.accessToken) {
         localStorage.setItem('access_token', body.accessToken);
+        if (body.refreshToken) {
+          localStorage.setItem('refresh_token', body.refreshToken);
+        }
         if (body.user) {
           localStorage.setItem('user', JSON.stringify(body.user));
         }

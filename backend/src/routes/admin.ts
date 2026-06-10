@@ -960,15 +960,37 @@ router.delete(
   catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    const product = await prisma.product.findUnique({ where: { id } });
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: { images: true }
+    });
     if (!product) {
       throw new AppError('Product not found', 404, 'NOT_FOUND');
     }
 
-    await prisma.product.update({
-      where: { id },
-      data: { status: 'UNLISTED' }
-    });
+    const orderCount = await prisma.order.count({ where: { productId: id } });
+    if (orderCount > 0) {
+      return res.status(409).json({
+        error: 'PRODUCT_HAS_ORDERS',
+        message: 'This product has order history and cannot be permanently deleted. Unlist it instead to hide it from the storefront.'
+      });
+    }
+
+    for (const image of product.images) {
+      for (const urlPath of [image.urlThumb, image.urlMedium, image.urlFull]) {
+        if (!urlPath) continue;
+        const fullDiskPath = urlPath.replace('/images/products/', '/data/images/products/');
+        try {
+          if (fs.existsSync(fullDiskPath)) {
+            fs.unlinkSync(fullDiskPath);
+          }
+        } catch (err: any) {
+          console.error(`Failed to delete image file ${fullDiskPath}:`, err.message);
+        }
+      }
+    }
+
+    await prisma.product.delete({ where: { id } });
 
     triggerRevalidation(product.slug);
 
