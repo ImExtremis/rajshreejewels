@@ -236,6 +236,30 @@ export default function OffersPage() {
     }
   };
 
+  const handleDeleteCoupon = async (coupon: Coupon) => {
+    if (!token) return;
+    const confirmDelete = window.confirm(`Are you absolutely sure you want to permanently delete coupon "${coupon.code}"? This action is irreversible.`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/admin/coupons/${coupon.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        triggerToast(`Coupon code "${coupon.code}" deleted successfully.`);
+        fetchCoupons(token);
+      } else {
+        const data = await res.json();
+        throw new Error(data.message || 'Failed to delete coupon');
+      }
+    } catch (err: any) {
+      triggerToast(err.message || 'Coupon deletion failed', 'error');
+    }
+  };
+
   const handleSaveSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token || !sale) return;
@@ -483,6 +507,21 @@ export default function OffersPage() {
                             }}
                           >
                             EDIT
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCoupon(coupon)}
+                            style={{
+                              background: '#ef4444',
+                              border: '1px solid #ef4444',
+                              color: '#000',
+                              padding: '4px 8px',
+                              fontSize: '10px',
+                              borderRadius: '2px',
+                              cursor: 'pointer',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            DELETE
                           </button>
                         </div>
                       </td>

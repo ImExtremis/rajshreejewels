@@ -89,60 +89,119 @@ router.get(
   auth,
   requirePermission('analytics.view'),
   catchAsync(async (req: Request, res: Response) => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const range = (req.query.range as string) || '30days';
+    const fromStr = req.query.from as string;
+    const toStr = req.query.to as string;
 
-    // 1. Fetch total sales and aggregate orders count (last 30 days)
+    let startDate = new Date();
+    let endDate = new Date();
+    let groupMode: 'day' | 'month' = 'day';
+
+    if (range === '30days') {
+      startDate.setDate(startDate.getDate() - 30);
+      groupMode = 'day';
+    } else if (range === 'thismonth') {
+      startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      groupMode = 'day';
+    } else if (range === 'lastmonth') {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      groupMode = 'day';
+    } else if (range === 'thisyear') {
+      startDate = new Date(startDate.getFullYear(), 0, 1);
+      groupMode = 'month';
+    } else if (range === 'alltime') {
+      startDate = new Date(2020, 0, 1); // Earliest catalog setup date
+      groupMode = 'month';
+    } else if (range === 'custom' && fromStr && toStr) {
+      startDate = new Date(fromStr);
+      endDate = new Date(toStr);
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      groupMode = diffDays > 90 ? 'month' : 'day';
+    } else {
+      startDate.setDate(startDate.getDate() - 30);
+      groupMode = 'day';
+    }
+
+    // 1. Fetch total sales and aggregate orders count within range
     const orders = await prisma.order.findMany({
       where: {
         status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
-        createdAt: { gte: thirtyDaysAgo }
+        createdAt: { gte: startDate, lte: endDate }
       },
       select: {
         totalINR: true,
-        createdAt: true
+        createdAt: true,
+        productId: true
       }
     });
 
     // Group sales and revenues by date
     const dailyMap = new Map<string, { date: string; revenue: number; orders: number }>();
-    
-    // Pre-populate last 30 days
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      dailyMap.set(dateStr, { date: dateStr, revenue: 0, orders: 0 });
+    const monthlyMap = new Map<string, { date: string; revenue: number; orders: number }>();
+
+    if (groupMode === 'day') {
+      let current = new Date(startDate);
+      while (current <= endDate) {
+        const dateStr = current.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        dailyMap.set(dateStr, { date: dateStr, revenue: 0, orders: 0 });
+        current.setDate(current.getDate() + 1);
+      }
+
+      orders.forEach((order) => {
+        const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        const record = dailyMap.get(dateStr);
+        if (record) {
+          record.revenue += order.totalINR;
+          record.orders += 1;
+        }
+      });
+    } else {
+      let current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (current <= endDate) {
+        const dateStr = current.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        monthlyMap.set(dateStr, { date: dateStr, revenue: 0, orders: 0 });
+        current.setMonth(current.getMonth() + 1);
+      }
+
+      orders.forEach((order) => {
+        const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+        const record = monthlyMap.get(dateStr);
+        if (record) {
+          record.revenue += order.totalINR;
+          record.orders += 1;
+        }
+      });
     }
 
-    orders.forEach((order) => {
-      const dateStr = new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-      const record = dailyMap.get(dateStr);
-      if (record) {
-        record.revenue += order.totalINR;
-        record.orders += 1;
+    const salesTimeline = groupMode === 'day' ? Array.from(dailyMap.values()) : Array.from(monthlyMap.values());
+
+    // 2. Fetch category sales breakdowns in the active range
+    const rangeProductIds = orders.map(o => o.productId);
+    const rangeProducts = await prisma.product.findMany({
+      where: { id: { in: rangeProductIds } },
+      select: { id: true, category: true }
+    });
+
+    const categoryMap = new Map<string, { category: string; count: number; revenue: number }>();
+    orders.forEach(order => {
+      const p = rangeProducts.find(prod => prod.id === order.productId);
+      if (p) {
+        const cat = p.category.replace('_', ' ');
+        const existing = categoryMap.get(cat) || { category: cat, count: 0, revenue: 0 };
+        existing.count += 1;
+        existing.revenue += order.totalINR;
+        categoryMap.set(cat, existing);
       }
     });
+    const categoryBreakdown = Array.from(categoryMap.values());
 
-    const salesTimeline = Array.from(dailyMap.values());
-
-    // 2. Fetch category sales breakdowns (SOLD products categorised)
-    const categorySales = await prisma.product.groupBy({
-      by: ['category'],
-      where: { status: ItemStatus.SOLD },
-      _count: { id: true },
-      _sum: { priceINR: true }
-    });
-
-    const categoryBreakdown = categorySales.map((c) => ({
-      category: c.category.replace('_', ' '),
-      count: c._count.id,
-      revenue: c._sum.priceINR || 0
-    }));
-
-    // 3. Fetch top products by view popularity (unique views)
+    // 3. Fetch top products by view popularity (unique views) in the range
     const topViews = await prisma.productView.groupBy({
       by: ['productId'],
+      where: { viewedAt: { gte: startDate, lte: endDate } },
       _count: { id: true },
       orderBy: { _count: { productId: 'desc' } },
       take: 5
@@ -176,7 +235,7 @@ router.get(
       ? Math.round((soldCount / totalInventoryCount) * 100)
       : 0;
 
-    // 5. Total highlights summary (Lifetime vs 30 days)
+    // 5. Total highlights summary (Lifetime vs Range)
     const lifetimeRevenue = await prisma.order.aggregate({
       where: { status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] } },
       _sum: { totalINR: true }
@@ -186,12 +245,36 @@ router.get(
       where: { status: ItemStatus.AVAILABLE }
     });
 
+    const totalCustomers = await prisma.user.count({ where: { isAdmin: false } });
+    const newCustomersInRange = await prisma.user.count({
+      where: {
+        isAdmin: false,
+        createdAt: { gte: startDate, lte: endDate }
+      }
+    });
+
+    const buyerOrdersCount = await prisma.order.groupBy({
+      by: ['userId'],
+      _count: { id: true },
+      where: {
+        status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+        createdAt: { gte: startDate, lte: endDate }
+      }
+    });
+    const repeatBuyersCount = buyerOrdersCount.filter(b => b._count.id > 1).length;
+
     res.json({
       summary: {
         totalRevenue: lifetimeRevenue._sum.totalINR || 0,
+        rangeRevenue: orders.reduce((sum, o) => sum + o.totalINR, 0),
         activeListings,
         soldCount,
         sellThroughRate,
+        totalCustomers,
+        newCustomers: newCustomersInRange,
+        repeatBuyers: repeatBuyersCount,
+        ordersCount: orders.length,
+        avgOrderValue: orders.length > 0 ? Math.round(orders.reduce((sum, o) => sum + o.totalINR, 0) / orders.length) : 0
       },
       salesTimeline,
       categoryBreakdown,

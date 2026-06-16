@@ -69,7 +69,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
-  const token = session?.accessToken;
+  const token = session?.accessToken || sessionUser.accessToken;
   const targetProductId = searchParams.get('productId');
 
   // Steps state
@@ -154,6 +154,7 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
   const [isCod, setIsCod] = useState(false);
   const [orderInitiatedData, setOrderInitiatedData] = useState<any>(null);
   const [placingOrder, setPlacingOrder] = useState(false);
+  const [mockTab, setMockTab] = useState<'upi' | 'card' | 'netbanking' | 'wallet'>('upi');
 
   // Reservation countdown timer
   const [timeLeft, setTimeLeft] = useState<number | null>(null); // in seconds (900s = 15m)
@@ -186,7 +187,8 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
 
   // Fetch initial checkout data (settings, addresses, product)
   useEffect(() => {
-    if (status !== 'authenticated' || !session?.accessToken) return;
+    if (status === 'loading') return;
+    if (!token) return;
     async function fetchData() {
       try {
         setLoading(true);
@@ -398,6 +400,55 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
       openRazorpayPayment(data);
     } catch (err: any) {
       triggerAlert(err.message || 'Failed to place order. Please try again.', 'error');
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    try {
+      setPlacingOrder(true);
+      const confirmRes = await apiClient('/orders/confirm-payment', {
+        method: 'POST',
+        body: JSON.stringify({
+          orderId: orderInitiatedData.orderId,
+          razorpayPaymentId: 'mock_pay_' + Date.now(),
+          razorpayOrderId: orderInitiatedData.razorpayOrderId,
+          razorpaySignature: 'mock_signature',
+        })
+      }, token);
+
+      const confirmData = await confirmRes.json();
+      if (!confirmRes.ok) {
+        throw new Error(confirmData.error || 'Mock payment confirmation failed.');
+      }
+
+      // Track GA4 purchase event for mock payment
+      if (product) {
+        trackEvent('purchase', {
+          transaction_id: confirmData.orderId,
+          value: pricing.total,
+          currency: 'INR',
+          shipping: pricing.shipping,
+          items: [
+            {
+              item_id: product.id,
+              item_name: product.displayName,
+              price: product.priceINR,
+              quantity: 1
+            }
+          ]
+        });
+      }
+
+      // Clear local cart
+      await apiClient('/cart/clear', {
+        method: 'POST',
+      }, token);
+
+      router.push(`/account/orders/${confirmData.orderId}?success=true`);
+    } catch (err: any) {
+      triggerAlert(err.message || 'Payment simulation failed.', 'error');
     } finally {
       setPlacingOrder(false);
     }
@@ -918,10 +969,10 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
 
             {/* STEP 3: Payment */}
             {currentStep === 'payment' && (
-              <div className="space-y-6 text-center py-10 animate-fade-in">
+              <div className="space-y-6 text-center py-6 animate-fade-in">
                 {/* 15-Minute Countdown Timer Widget */}
                 {timeLeft !== null && (
-                  <div className="mb-8">
+                  <div className="mb-4">
                     <span className="font-body text-xs font-semibold text-text-muted uppercase tracking-widest block mb-2">
                       Holding your unique piece
                     </span>
@@ -934,22 +985,132 @@ export default function CheckoutClient({ sessionUser }: CheckoutClientProps) {
                   </div>
                 )}
 
-                <div className="max-w-md mx-auto bg-surface border border-border-custom rounded-lg p-6 shadow-sm">
-                  <h3 className="font-display text-xl font-bold text-primary uppercase tracking-wide mb-2">
-                    Awaiting Payment Details
-                  </h3>
-                  <p className="text-text-muted font-body text-sm mb-6 leading-relaxed">
-                    A secure checkout overlay has been prompted. If you closed the window prematurely, please trigger the payment again below.
-                  </p>
-                  
-                  <button
-                    disabled={placingOrder}
-                    onClick={() => orderInitiatedData && openRazorpayPayment(orderInitiatedData)}
-                    className="w-full bg-accent text-surface hover:bg-accent-light py-3 rounded-md font-body text-xs font-bold uppercase tracking-wider transition-colors"
-                  >
-                    Open Payment Window
-                  </button>
-                </div>
+                {orderInitiatedData?.isMockPayment ? (
+                  <div className="max-w-md mx-auto bg-surface border border-border-custom rounded-lg p-6 shadow-sm text-left">
+                    <h3 className="font-display text-lg font-bold text-accent uppercase tracking-wide mb-2 text-center">
+                      Simulated Payment Gateway
+                    </h3>
+                    <p className="text-text-muted font-body text-xs mb-6 text-center leading-relaxed">
+                      Razorpay is currently unconfigured or running in offline mode. Select a simulated method below to complete your order.
+                    </p>
+
+                    {/* Tab Selectors */}
+                    <div className="flex border-b border-border-custom mb-6 text-xs font-bold uppercase tracking-wider">
+                      {(['upi', 'card', 'netbanking', 'wallet'] as const).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setMockTab(tab)}
+                          className={`flex-1 pb-3 text-center transition-colors border-b-2 ${
+                            mockTab === tab 
+                              ? 'border-accent text-accent' 
+                              : 'border-transparent text-text-muted hover:text-primary'
+                          }`}
+                        >
+                          {tab === 'upi' ? 'UPI' : tab === 'card' ? 'Card' : tab === 'netbanking' ? 'Net Banking' : 'Wallet'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tab Contents */}
+                    <div className="space-y-4 mb-6">
+                      {mockTab === 'upi' && (
+                        <div className="space-y-2">
+                          <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block">Virtual Payment Address (VPA)</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. success@upihandle"
+                            defaultValue="success@razorpay"
+                            className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full font-mono text-primary"
+                          />
+                        </div>
+                      )}
+
+                      {mockTab === 'card' && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Card Number</label>
+                            <input
+                              type="text"
+                              placeholder="4111 1111 1111 1111"
+                              defaultValue="4111 1111 1111 1111"
+                              className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full font-mono text-primary"
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">Expiry Date</label>
+                              <input
+                                type="text"
+                                placeholder="MM/YY"
+                                defaultValue="12/30"
+                                className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full font-mono text-primary"
+                              />
+                            </div>
+                            <div>
+                              <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block mb-1">CVV</label>
+                              <input
+                                type="password"
+                                placeholder="123"
+                                defaultValue="123"
+                                className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full font-mono text-primary"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {mockTab === 'netbanking' && (
+                        <div className="space-y-2">
+                          <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block">Select Bank</label>
+                          <select className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full text-primary">
+                            <option>State Bank of India (SBI)</option>
+                            <option>HDFC Bank</option>
+                            <option>ICICI Bank</option>
+                            <option>Axis Bank</option>
+                            <option>Punjab National Bank</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {mockTab === 'wallet' && (
+                        <div className="space-y-2">
+                          <label className="font-body text-xs font-semibold text-text-muted uppercase tracking-wider block">Select Wallet</label>
+                          <select className="bg-surface border border-border-custom rounded py-2 px-3 text-sm focus:outline-none focus:border-accent w-full text-primary">
+                            <option>Paytm Wallet</option>
+                            <option>PhonePe</option>
+                            <option>Amazon Pay</option>
+                            <option>MobiKwik</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      disabled={placingOrder}
+                      onClick={handleSimulatePayment}
+                      className="w-full bg-accent text-surface hover:bg-accent-light py-3 rounded-md font-body text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
+                    >
+                      {placingOrder ? 'Simulating Payment...' : 'Simulate Payment Success'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="max-w-md mx-auto bg-surface border border-border-custom rounded-lg p-6 shadow-sm">
+                    <h3 className="font-display text-xl font-bold text-primary uppercase tracking-wide mb-2">
+                      Awaiting Payment Details
+                    </h3>
+                    <p className="text-text-muted font-body text-sm mb-6 leading-relaxed">
+                      A secure checkout overlay has been prompted. If you closed the window prematurely, please trigger the payment again below.
+                    </p>
+                    
+                    <button
+                      disabled={placingOrder}
+                      onClick={() => orderInitiatedData && openRazorpayPayment(orderInitiatedData)}
+                      className="w-full bg-accent text-surface hover:bg-accent-light py-3 rounded-md font-body text-xs font-bold uppercase tracking-wider transition-colors"
+                    >
+                      Open Payment Window
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

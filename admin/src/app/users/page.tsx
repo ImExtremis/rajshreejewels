@@ -23,6 +23,8 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteUsername, setInviteUsername] = useState('');
   const [inviteRoleIds, setInviteRoleIds] = useState<string[]>([]);
+  const [passwordMethod, setPasswordMethod] = useState<'email' | 'manual'>('email');
+  const [invitePassword, setInvitePassword] = useState('');
   const [inviting, setInviting] = useState(false);
 
   // Edit form state
@@ -80,14 +82,20 @@ export default function UsersPage() {
           name: inviteName,
           email: inviteEmail,
           username: inviteUsername,
-          roleIds: inviteRoleIds
+          roleIds: inviteRoleIds,
+          passwordMethod,
+          ...(passwordMethod === 'manual' ? { password: invitePassword } : {})
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Invitation failed');
 
-      setSuccessMsg(`Team member ${inviteName} invited successfully! Temporary password sent to email.`);
+      setSuccessMsg(
+        passwordMethod === 'manual' 
+          ? `Team member ${inviteName} created successfully! Credentials configured manually.`
+          : `Team member ${inviteName} invited successfully! Temporary password sent to email.`
+      );
       setInviteModalOpen(false);
       resetInviteForm();
       fetchData();
@@ -103,6 +111,8 @@ export default function UsersPage() {
     setInviteEmail('');
     setInviteUsername('');
     setInviteRoleIds([]);
+    setPasswordMethod('email');
+    setInvitePassword('');
   };
 
   const openEditDrawer = (user: any) => {
@@ -379,6 +389,7 @@ export default function UsersPage() {
                   onChange={(e) => setInviteName(e.target.value)}
                   placeholder="e.g. Ramesh Chandra"
                   style={{ width: '100%', padding: '10px 14px', background: '#0a0a0a', border: '1px solid #222', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }}
+                  required
                 />
               </div>
 
@@ -390,6 +401,7 @@ export default function UsersPage() {
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="ramesh@rajshreejewels.com"
                   style={{ width: '100%', padding: '10px 14px', background: '#0a0a0a', border: '1px solid #222', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }}
+                  required
                 />
               </div>
 
@@ -401,8 +413,53 @@ export default function UsersPage() {
                   onChange={(e) => setInviteUsername(e.target.value)}
                   placeholder="ramesh_lister"
                   style={{ width: '100%', padding: '10px 14px', background: '#0a0a0a', border: '1px solid #222', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }}
+                  required
                 />
               </div>
+
+              {/* Password Method selection */}
+              <div style={{ marginBottom: '18px' }}>
+                <label style={{ display: 'block', fontSize: '10px', color: '#888', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.5px' }}>Credential Option</label>
+                <div style={{ display: 'flex', gap: '20px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer', color: '#fff' }}>
+                    <input
+                      type="radio"
+                      name="passwordMethod"
+                      value="email"
+                      checked={passwordMethod === 'email'}
+                      onChange={() => setPasswordMethod('email')}
+                      style={{ accentColor: '#C9A84C' }}
+                    />
+                    Send to Email
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', cursor: 'pointer', color: '#fff' }}>
+                    <input
+                      type="radio"
+                      name="passwordMethod"
+                      value="manual"
+                      checked={passwordMethod === 'manual'}
+                      onChange={() => setPasswordMethod('manual')}
+                      style={{ accentColor: '#C9A84C' }}
+                    />
+                    Set Manually
+                  </label>
+                </div>
+              </div>
+
+              {passwordMethod === 'manual' && (
+                <div style={{ marginBottom: '18px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', color: '#888', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>Manual Password</label>
+                  <input
+                    type="password"
+                    value={invitePassword}
+                    onChange={(e) => setInvitePassword(e.target.value)}
+                    placeholder="Enter manual password (min 6 chars)"
+                    style={{ width: '100%', padding: '10px 14px', background: '#0a0a0a', border: '1px solid #222', color: '#fff', borderRadius: '4px', boxSizing: 'border-box' }}
+                    minLength={6}
+                    required
+                  />
+                </div>
+              )}
 
               <div style={{ marginBottom: '25px' }}>
                 <label style={{ display: 'block', fontSize: '10px', color: '#888', textTransform: 'uppercase', marginBottom: '10px', letterSpacing: '0.5px' }}>Assign Initial Roles</label>

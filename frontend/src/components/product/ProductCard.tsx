@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Product, ItemStatus } from '../../types';
 
 interface ProductCardProps {
@@ -9,9 +11,125 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [isWishlisted, setIsWishlisted] = useState(false);
+
   const isSold = product.status === ItemStatus.SOLD;
   const isReserved = product.status === ItemStatus.RESERVED;
   const hasDiscount = product.originalPriceINR && product.originalPriceINR > product.priceINR;
+
+  useEffect(() => {
+    if (status !== 'authenticated') {
+      setIsWishlisted(false);
+      return;
+    }
+
+    const checkWishlist = () => {
+      const cached = sessionStorage.getItem('rajshree_wishlist');
+      if (cached) {
+        const list = JSON.parse(cached) as string[];
+        setIsWishlisted(list.includes(product.id));
+      }
+    };
+
+    checkWishlist();
+
+    window.addEventListener('wishlist_updated', checkWishlist);
+
+    const cached = sessionStorage.getItem('rajshree_wishlist');
+    if (!cached && session?.accessToken) {
+      if (!(window as any)._fetching_wishlist) {
+        (window as any)._fetching_wishlist = true;
+        fetch('/api/v1/users/me/wishlist', {
+          headers: { 'Authorization': `Bearer ${session.accessToken}` }
+        })
+          .then(res => {
+            if (res.ok) return res.json();
+            throw new Error();
+          })
+          .then((data: any[]) => {
+            const ids = data.map((item: any) => item.id);
+            sessionStorage.setItem('rajshree_wishlist', JSON.stringify(ids));
+            window.dispatchEvent(new CustomEvent('wishlist_updated'));
+          })
+          .catch(() => {})
+          .finally(() => {
+            (window as any)._fetching_wishlist = false;
+          });
+      }
+    }
+
+    return () => {
+      window.removeEventListener('wishlist_updated', checkWishlist);
+    };
+  }, [status, session?.accessToken, product.id]);
+
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (status !== 'authenticated' || !session?.accessToken) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const cached = sessionStorage.getItem('rajshree_wishlist');
+    let list: string[] = cached ? JSON.parse(cached) : [];
+
+    const wasWishlisted = isWishlisted;
+    if (wasWishlisted) {
+      list = list.filter(id => id !== product.id);
+      setIsWishlisted(false);
+    } else {
+      list.push(product.id);
+      setIsWishlisted(true);
+    }
+    sessionStorage.setItem('rajshree_wishlist', JSON.stringify(list));
+    window.dispatchEvent(new CustomEvent('wishlist_updated'));
+
+    try {
+      const url = wasWishlisted 
+        ? `/api/v1/users/me/wishlist/${product.id}`
+        : `/api/v1/users/me/wishlist`;
+      
+      const method = wasWishlisted ? 'DELETE' : 'POST';
+      const body = wasWishlisted ? undefined : JSON.stringify({ productId: product.id });
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.accessToken}`
+        },
+        body
+      });
+
+      if (!res.ok) {
+        // Revert cache on failure
+        const currentCached = sessionStorage.getItem('rajshree_wishlist');
+        let currentList: string[] = currentCached ? JSON.parse(currentCached) : [];
+        if (wasWishlisted) {
+          currentList.push(product.id);
+        } else {
+          currentList = currentList.filter(id => id !== product.id);
+        }
+        sessionStorage.setItem('rajshree_wishlist', JSON.stringify(currentList));
+        window.dispatchEvent(new CustomEvent('wishlist_updated'));
+      }
+    } catch (err) {
+      // Revert cache on failure
+      const currentCached = sessionStorage.getItem('rajshree_wishlist');
+      let currentList: string[] = currentCached ? JSON.parse(currentCached) : [];
+      if (wasWishlisted) {
+        currentList.push(product.id);
+      } else {
+        currentList = currentList.filter(id => id !== product.id);
+      }
+      sessionStorage.setItem('rajshree_wishlist', JSON.stringify(currentList));
+      window.dispatchEvent(new CustomEvent('wishlist_updated'));
+    }
+  };
 
   const CardContent = (
     <div className={`group relative bg-surface-2 border border-border-custom rounded-card overflow-hidden shadow-card hover:shadow-lg transition-all duration-300 flex flex-col h-full ${isSold ? 'opacity-60 cursor-not-allowed' : 'gold-glow'}`}>
@@ -28,14 +146,15 @@ export default function ProductCard({ product }: ProductCardProps) {
         {/* Wishlist button */}
         {!isSold && (
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              // Wishlist toggle callback
-            }}
+            onClick={handleToggleWishlist}
             className="absolute top-3 right-3 p-1.5 rounded-full bg-surface/80 border border-border-custom text-text-muted hover:text-error-custom hover:bg-surface transition-colors z-10"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg 
+              className={`h-5 w-5 transition-colors duration-200 ${isWishlisted ? 'text-error-custom fill-current' : 'text-text-muted'}`} 
+              fill={isWishlisted ? 'currentColor' : 'none'} 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
             </svg>
           </button>
@@ -99,7 +218,6 @@ export default function ProductCard({ product }: ProductCardProps) {
   );
 
   if (isSold) {
-    // Sold items are visually greyed out and not clickable, but we keep the detail link working to protect SEO backlinks as per "Things Not to Miss"
     return (
       <Link href={`/shop/${product.slug}`} className="cursor-pointer block h-full">
         {CardContent}

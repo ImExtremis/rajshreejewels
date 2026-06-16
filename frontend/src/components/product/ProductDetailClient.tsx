@@ -21,6 +21,7 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
   const [buyingNow, setBuyingNow] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
+  const [isWishlisted, setIsWishlisted] = useState<boolean>(false);
 
   useEffect(() => {
     async function fetchSettings() {
@@ -102,6 +103,51 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
     return () => clearInterval(interval);
   }, [product.status, product.slug]);
 
+  useEffect(() => {
+    if (session?.accessToken) {
+      const checkWishlist = () => {
+        const cached = sessionStorage.getItem('rajshree_wishlist');
+        if (cached) {
+          const list = JSON.parse(cached) as string[];
+          setIsWishlisted(list.includes(product.id));
+        }
+      };
+
+      checkWishlist();
+
+      window.addEventListener('wishlist_updated', checkWishlist);
+
+      const cached = sessionStorage.getItem('rajshree_wishlist');
+      if (!cached) {
+        if (!(window as any)._fetching_wishlist) {
+          (window as any)._fetching_wishlist = true;
+          fetch('/api/v1/users/me/wishlist', {
+            headers: { 'Authorization': `Bearer ${session.accessToken}` }
+          })
+            .then(res => {
+              if (res.ok) return res.json();
+              throw new Error();
+            })
+            .then((data: any[]) => {
+              const ids = data.map((item: any) => item.id);
+              sessionStorage.setItem('rajshree_wishlist', JSON.stringify(ids));
+              window.dispatchEvent(new CustomEvent('wishlist_updated'));
+            })
+            .catch(() => {})
+            .finally(() => {
+              (window as any)._fetching_wishlist = false;
+            });
+        }
+      }
+
+      return () => {
+        window.removeEventListener('wishlist_updated', checkWishlist);
+      };
+    } else {
+      setIsWishlisted(false);
+    }
+  }, [session?.accessToken, product.id]);
+
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 5000);
@@ -140,6 +186,74 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
       triggerToast(err.message || 'Failed to add to cart');
     } finally {
       setAddingToCart(false);
+    }
+  };
+
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!session?.accessToken) {
+      router.push('/auth/login');
+      return;
+    }
+
+    const cached = sessionStorage.getItem('rajshree_wishlist');
+    let list: string[] = cached ? JSON.parse(cached) : [];
+
+    const wasWishlisted = isWishlisted;
+    if (wasWishlisted) {
+      list = list.filter(id => id !== product.id);
+      setIsWishlisted(false);
+    } else {
+      list.push(product.id);
+      setIsWishlisted(true);
+    }
+    sessionStorage.setItem('rajshree_wishlist', JSON.stringify(list));
+    window.dispatchEvent(new CustomEvent('wishlist_updated'));
+
+    try {
+      const url = wasWishlisted 
+        ? `/api/v1/users/me/wishlist/${product.id}`
+        : `/api/v1/users/me/wishlist`;
+      
+      const method = wasWishlisted ? 'DELETE' : 'POST';
+      const body = wasWishlisted ? undefined : JSON.stringify({ productId: product.id });
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.accessToken}`
+        },
+        body
+      });
+
+      if (!res.ok) {
+        // Revert cache on failure
+        const currentCached = sessionStorage.getItem('rajshree_wishlist');
+        let currentList: string[] = currentCached ? JSON.parse(currentCached) : [];
+        if (wasWishlisted) {
+          currentList.push(product.id);
+        } else {
+          currentList = currentList.filter(id => id !== product.id);
+        }
+        sessionStorage.setItem('rajshree_wishlist', JSON.stringify(currentList));
+        window.dispatchEvent(new CustomEvent('wishlist_updated'));
+      } else {
+        triggerToast(wasWishlisted ? "✨ Removed from wishlist" : "✨ Added to wishlist");
+      }
+    } catch (err) {
+      // Revert cache on failure
+      const currentCached = sessionStorage.getItem('rajshree_wishlist');
+      let currentList: string[] = currentCached ? JSON.parse(currentCached) : [];
+      if (wasWishlisted) {
+        currentList.push(product.id);
+      } else {
+        currentList = currentList.filter(id => id !== product.id);
+      }
+      sessionStorage.setItem('rajshree_wishlist', JSON.stringify(currentList));
+      window.dispatchEvent(new CustomEvent('wishlist_updated'));
     }
   };
 
@@ -330,11 +444,11 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
 
           {/* Action Buttons */}
           <div className="flex flex-col space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex gap-3">
               <button
                 onClick={handleAddToCart}
                 disabled={!isAvailable || addingToCart}
-                className={`py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-primary text-surface hover:bg-accent' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
+                className={`flex-grow py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-primary text-surface hover:bg-accent' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
               >
                 {product.status === ItemStatus.SOLD 
                   ? 'SOLD OUT' 
@@ -348,7 +462,7 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
               <button
                 onClick={handleBuyNow}
                 disabled={!isAvailable || buyingNow}
-                className={`py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-accent text-primary hover:bg-primary hover:text-surface font-semibold' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
+                className={`flex-grow py-4 text-xs font-bold uppercase tracking-widest rounded-card shadow transition-all duration-300 ${isAvailable ? 'bg-accent text-primary hover:bg-primary hover:text-surface font-semibold' : 'bg-sold/30 text-sold/80 cursor-not-allowed'}`}
               >
                 {product.status === ItemStatus.SOLD 
                   ? 'SOLD OUT' 
@@ -358,6 +472,24 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
                       ? 'Processing...' 
                       : 'Buy Now'}
               </button>
+
+              {!isSold && (
+                <button
+                  type="button"
+                  onClick={handleToggleWishlist}
+                  className="px-5 py-4 rounded-card border border-border-custom bg-surface hover:bg-surface-2 transition-colors flex items-center justify-center text-text-muted hover:text-error-custom shadow"
+                  title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+                >
+                  <svg 
+                    className={`h-5 w-5 transition-colors duration-200 ${isWishlisted ? 'text-error-custom fill-current' : ''}`} 
+                    fill={isWishlisted ? 'currentColor' : 'none'} 
+                    viewBox="0 0 24 24" 
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                </button>
+              )}
             </div>
             
             {isAvailable && (

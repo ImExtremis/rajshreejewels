@@ -970,9 +970,17 @@ router.delete(
 
     const orderCount = await prisma.order.count({ where: { productId: id } });
     if (orderCount > 0) {
-      return res.status(409).json({
-        error: 'PRODUCT_HAS_ORDERS',
-        message: 'This product has order history and cannot be permanently deleted. Unlist it instead to hide it from the storefront.'
+      // Delete all Invoices of orders for this product
+      await prisma.invoice.deleteMany({
+        where: { order: { productId: id } }
+      });
+      // Delete all CouponUses of orders for this product
+      await prisma.couponUse.deleteMany({
+        where: { order: { productId: id } }
+      });
+      // Delete all orders for this product
+      await prisma.order.deleteMany({
+        where: { productId: id }
       });
     }
 
@@ -1336,7 +1344,12 @@ router.post(
       name: z.string().min(2),
       email: z.string().email(),
       username: z.string().regex(/^[a-zA-Z0-9_]+$/).min(3).max(20),
-      roleIds: z.array(z.string())
+      roleIds: z.array(z.string()),
+      passwordMethod: z.enum(['email', 'manual']).default('email'),
+      password: z.string().min(6).optional()
+    }).refine(data => data.passwordMethod === 'email' || (data.passwordMethod === 'manual' && !!data.password), {
+      message: "Password is required for manual credential setup",
+      path: ["password"]
     });
 
     const body = inviteSchema.parse(req.body);
@@ -1353,7 +1366,8 @@ router.post(
       return res.status(400).json({ error: 'EMAIL_OR_USERNAME_EXISTS', message: 'User already exists' });
     }
 
-    const tempPassword = crypto.randomBytes(8).toString('hex') + '1aA!';
+    const isManual = body.passwordMethod === 'manual';
+    const tempPassword = isManual ? body.password! : crypto.randomBytes(8).toString('hex') + '1aA!';
     const passwordHash = await bcrypt.hash(tempPassword, 12);
 
     const user = await prisma.user.create({
@@ -1385,15 +1399,24 @@ router.post(
 
     // Send email notification
     try {
+      const emailHtml = isManual 
+        ? `<h1>Welcome to the team, ${body.name}!</h1>
+           <p>An administrator has created an account for you on the Rajshree Jewels platform.</p>
+           <p><strong>Username:</strong> ${body.username}</p>
+           <p><strong>Email:</strong> ${body.email}</p>
+           <p>Please contact your administrator to receive your login password.</p>
+           <p>Log in at: <a href="${config.ADMIN_URL}">${config.ADMIN_URL}</a></p>`
+        : `<h1>Welcome to the team, ${body.name}!</h1>
+           <p>You have been invited as an Administrator. Here are your credentials:</p>
+           <p><strong>Username:</strong> ${body.username}</p>
+           <p><strong>Email:</strong> ${body.email}</p>
+           <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+           <p>Please log in at <a href="${config.ADMIN_URL}">${config.ADMIN_URL}</a> and change your password immediately.</p>`;
+
       await notificationsService.sendEmail({
         to: body.email,
         subject: 'Welcome to Rajshree Jewels Team — Administrative Invite',
-        html: `<h1>Welcome to the team, ${body.name}!</h1>
-               <p>You have been invited as an Administrator. Here are your credentials:</p>
-               <p><strong>Username:</strong> ${body.username}</p>
-               <p><strong>Email:</strong> ${body.email}</p>
-               <p><strong>Temporary Password:</strong> ${tempPassword}</p>
-               <p>Please log in at <a href="${config.ADMIN_URL}">${config.ADMIN_URL}</a> and change your password immediately.</p>`
+        html: emailHtml
       });
     } catch (err: any) {
       console.error('❌ Failed to send invite email:', err.message);
@@ -1690,17 +1713,30 @@ router.put(
   })
 );
 
-// DELETE /admin/coupons/:id (Soft delete/deactivate)
+// DELETE /admin/coupons/:id
 router.delete(
   '/coupons/:id',
   auth,
   requirePermission('finance.manage_coupons'),
   catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    await prisma.coupon.update({
-      where: { id },
-      data: { isActive: false }
+
+    // Set couponId to null on all referencing Order records
+    await prisma.order.updateMany({
+      where: { couponId: id },
+      data: { couponId: null }
     });
+
+    // Delete all CouponUse log entries associated with the coupon
+    await prisma.couponUse.deleteMany({
+      where: { couponId: id }
+    });
+
+    // Delete the Coupon record entirely
+    await prisma.coupon.delete({
+      where: { id }
+    });
+
     res.json({ success: true });
   })
 );
@@ -2514,6 +2550,27 @@ router.delete(
       throw new AppError('User not found', 404, 'NOT_FOUND');
     }
 
+    // Special case: deleting the global anonymised customer
+    if (user.email === 'anonymised@rajshreejewels.com') {
+      // Delete all Invoices of this user's orders
+      await prisma.invoice.deleteMany({
+        where: { order: { userId: id } }
+      });
+      // Delete all CouponUses of this user
+      await prisma.couponUse.deleteMany({
+        where: { userId: id }
+      });
+      // Delete all Orders of this user
+      await prisma.order.deleteMany({
+        where: { userId: id }
+      });
+      // Now delete the anonymised user account itself
+      await prisma.user.delete({
+        where: { id }
+      });
+      return res.json({ success: true, message: 'Global anonymised customer and all history deleted.' });
+    }
+
     const orderCount = user._count.orders;
 
     if (orderCount > 0 && !force) {
@@ -2557,6 +2614,14 @@ router.delete(
         data: {
           userId: anonymisedUser.id,
           addressId: dummyAddress.id,
+        }
+      });
+
+      // Also update CouponUse to point to the anonymised user
+      await prisma.couponUse.updateMany({
+        where: { userId: id },
+        data: {
+          userId: anonymisedUser.id,
         }
       });
     }
