@@ -301,6 +301,7 @@ export default function ProductDetailClient({ initialProduct }: ProductDetailCli
 
   const badge = getBadgeStyle();
   const isAvailable = product.status === ItemStatus.AVAILABLE;
+  const isSold = product.status === ItemStatus.SOLD;
 
   return (
     <div className="flex flex-col space-y-12">
